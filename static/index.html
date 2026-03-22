@@ -1,0 +1,1475 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fovea</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+/* Light theme (default) */
+:root, [data-theme="light"] {
+  --bg: #f4f5f7;
+  --bg2: #ffffff;
+  --card: #ffffff;
+  --card-hover: #f9fafb;
+  --border: #e5e7eb;
+  --border-accent: rgba(99,102,241,0.35);
+  --text: #111827;
+  --text2: #6b7280;
+  --text3: #9ca3af;
+  --accent: #6366f1;
+  --accent-soft: rgba(99,102,241,0.08);
+  --accent-hover: #4f46e5;
+  --success: #10b981;
+  --success-soft: rgba(16,185,129,0.08);
+  --warning: #f59e0b;
+  --warning-soft: rgba(245,158,11,0.08);
+  --danger: #ef4444;
+  --danger-soft: rgba(239,68,68,0.08);
+  --glass: rgba(255,255,255,0.85);
+  --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-lg: 0 4px 16px rgba(0,0,0,0.08);
+  --thumb-bg: #f0f0f0;
+  --file-bg: #fafafa;
+  --overlay: rgba(255,255,255,0.6);
+  --checkbox-bg: rgba(0,0,0,0.25);
+  --radius: 12px;
+  --radius-sm: 8px;
+  --radius-xs: 6px;
+  --transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Dark theme */
+[data-theme="dark"] {
+  --bg: #0f1117;
+  --bg2: #161923;
+  --card: #1c1f2e;
+  --card-hover: #232738;
+  --border: rgba(255,255,255,0.06);
+  --border-accent: rgba(99,102,241,0.4);
+  --text: #e8eaed;
+  --text2: #8b8fa3;
+  --text3: #565a6e;
+  --accent: #6366f1;
+  --accent-soft: rgba(99,102,241,0.12);
+  --accent-hover: #818cf8;
+  --success: #34d399;
+  --success-soft: rgba(52,211,153,0.12);
+  --warning: #fbbf24;
+  --warning-soft: rgba(251,191,36,0.12);
+  --danger: #f87171;
+  --danger-soft: rgba(248,113,113,0.12);
+  --glass: rgba(28,31,46,0.85);
+  --shadow: 0 2px 8px rgba(0,0,0,0.3);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,0.4);
+  --thumb-bg: #0d0f16;
+  --file-bg: #161923;
+  --overlay: rgba(0,0,0,0.6);
+  --checkbox-bg: rgba(0,0,0,0.4);
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ====== LAYOUT ====== */
+.app { display: flex; height: 100vh; overflow: hidden; }
+
+/* ====== SIDEBAR ====== */
+.sidebar {
+  width: 240px;
+  background: var(--bg2);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
+.sidebar-header {
+  padding: 24px 20px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.sidebar-header h1 {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sidebar-header h1::before {
+  content: '';
+  width: 8px; height: 8px;
+  background: var(--accent);
+  border-radius: 50%;
+  box-shadow: 0 0 8px var(--accent);
+}
+
+.sidebar-nav { flex: 1; padding: 12px 10px; overflow-y: auto; }
+
+.nav-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text3);
+  padding: 16px 12px 6px;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text2);
+  transition: all var(--transition);
+  margin-bottom: 2px;
+}
+
+.nav-item:hover { background: var(--accent-soft); color: var(--text); }
+
+.nav-item.active {
+  background: var(--accent-soft);
+  color: var(--accent-hover);
+}
+
+.nav-item svg { width: 18px; height: 18px; opacity: 0.7; }
+.nav-item.active svg { opacity: 1; }
+
+.nav-item .badge {
+  margin-left: auto;
+  background: var(--accent);
+  color: white;
+  font-size: 10px;
+  padding: 2px 7px;
+  border-radius: 10px;
+  font-weight: 600;
+}
+
+.sidebar-footer {
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+}
+
+.theme-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--file-bg);
+  color: var(--text2);
+  font-size: 12px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.theme-toggle:hover { background: var(--accent-soft); color: var(--text); }
+
+/* ====== MAIN ====== */
+.main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+.topbar {
+  padding: 18px 28px;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+
+.topbar h2 {
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+}
+
+.content { flex: 1; overflow-y: auto; padding: 24px 28px; }
+.content::-webkit-scrollbar { width: 6px; }
+.content::-webkit-scrollbar-thumb { background: var(--text3); border-radius: 3px; }
+.content::-webkit-scrollbar-track { background: transparent; }
+
+/* ====== CARDS ====== */
+.card {
+  background: var(--card);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  margin-bottom: 20px;
+  overflow: hidden;
+}
+
+.card-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.card-header h3 {
+  font-size: 14px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.card-header h3 .step {
+  width: 22px; height: 22px;
+  background: var(--accent);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: white;
+  flex-shrink: 0;
+}
+
+.card-body { padding: 20px; }
+
+/* ====== BUTTONS ====== */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: all var(--transition);
+  font-family: inherit;
+  letter-spacing: 0.01em;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: white;
+  box-shadow: 0 2px 12px rgba(99,102,241,0.3);
+}
+.btn-primary:hover { background: var(--accent-hover); box-shadow: 0 4px 20px rgba(99,102,241,0.4); transform: translateY(-1px); }
+.btn-primary:disabled { background: var(--text3); box-shadow: none; cursor: not-allowed; transform: none; }
+
+.btn-secondary {
+  background: var(--accent-soft);
+  color: var(--text2);
+  border: 1px solid var(--border);
+}
+.btn-secondary:hover { background: var(--border); color: var(--text); }
+
+.btn-ghost { background: none; color: var(--text2); padding: 6px 10px; }
+.btn-ghost:hover { background: var(--accent-soft); color: var(--text); }
+
+.btn-success { background: var(--success); color: #064e3b; }
+.btn-danger { background: var(--danger); color: #450a0a; }
+.btn-sm { padding: 5px 10px; font-size: 11px; }
+.btn-group { display: flex; gap: 6px; flex-wrap: wrap; }
+
+/* ====== VOLUME CARDS ====== */
+.volume-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.volume-card {
+  padding: 16px;
+  border-radius: var(--radius);
+  border: 1.5px solid var(--border);
+  cursor: pointer;
+  transition: all var(--transition);
+  background: var(--file-bg);
+  position: relative;
+  overflow: hidden;
+}
+
+.volume-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  background: transparent;
+  transition: background var(--transition);
+}
+
+.volume-card:hover { border-color: var(--text3); background: var(--card-hover); }
+.volume-card.active { border-color: var(--accent); background: var(--accent-soft); }
+.volume-card.active::before { background: var(--accent); }
+
+.volume-card .name { font-weight: 600; font-size: 14px; margin-bottom: 4px; }
+.volume-card .meta { font-size: 11px; color: var(--text2); line-height: 1.5; }
+
+.volume-card .brand-tag {
+  display: inline-block;
+  background: var(--accent-soft);
+  color: var(--accent-hover);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 4px;
+  margin-top: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* ====== STATS ====== */
+.stats-bar {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.stat {
+  flex: 1;
+  min-width: 80px;
+  padding: 14px 16px;
+  background: var(--file-bg);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  text-align: center;
+}
+
+.stat .value {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--accent-hover);
+  line-height: 1;
+}
+
+.stat .label {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text3);
+  margin-top: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* ====== FILE TOOLBAR ====== */
+.file-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 0;
+  flex-wrap: wrap;
+}
+
+.filter-btn {
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text2);
+  cursor: pointer;
+  transition: all var(--transition);
+  font-family: inherit;
+}
+
+.filter-btn:hover { background: var(--accent-soft); color: var(--text); }
+.filter-btn.active { background: var(--accent); color: white; border-color: var(--accent); }
+
+/* ====== FILE GRID ====== */
+.file-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 10px;
+}
+
+.file-card {
+  border-radius: var(--radius-sm);
+  border: 2px solid transparent;
+  overflow: hidden;
+  cursor: pointer;
+  transition: all var(--transition);
+  position: relative;
+  background: var(--file-bg);
+}
+
+.file-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-lg); }
+.file-card.selected { border-color: var(--accent); }
+.file-card.imported { opacity: 0.35; }
+
+.file-card .thumb {
+  width: 100%;
+  aspect-ratio: 4/3;
+  background: var(--thumb-bg);
+  overflow: hidden;
+  position: relative;
+}
+
+.file-card .thumb img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  transition: transform 0.3s ease;
+}
+
+.file-card:hover .thumb img { transform: scale(1.05); }
+
+.file-card .thumb .placeholder {
+  width: 100%; height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text3);
+  font-size: 24px;
+}
+
+.file-card .checkbox {
+  position: absolute;
+  top: 8px; left: 8px;
+  width: 20px; height: 20px;
+  border-radius: 6px;
+  border: 2px solid rgba(255,255,255,0.5);
+  background: var(--checkbox-bg);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 11px;
+  font-weight: 700;
+  z-index: 2;
+  transition: all var(--transition);
+}
+
+.file-card.selected .checkbox {
+  background: var(--accent);
+  border-color: var(--accent);
+  box-shadow: 0 2px 8px rgba(99,102,241,0.4);
+}
+
+.file-card .type-tag {
+  position: absolute;
+  top: 8px; right: 8px;
+  font-size: 9px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  z-index: 2;
+  backdrop-filter: blur(4px);
+}
+
+.type-raw { background: rgba(251,191,36,0.85); color: #1a1a1a; }
+.type-jpeg { background: rgba(52,211,153,0.85); color: #1a1a1a; }
+.type-video { background: rgba(99,102,241,0.85); color: white; }
+.type-sidecar { background: rgba(168,85,247,0.85); color: white; }
+.type-system { background: rgba(248,113,113,0.85); color: white; }
+
+.file-card .info { padding: 10px; }
+
+.file-card .info .name {
+  font-size: 11px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-card .info .detail {
+  font-size: 10px;
+  color: var(--text3);
+  margin-top: 3px;
+}
+
+/* ====== IMPORT OPTIONS ====== */
+.options-row {
+  display: flex;
+  gap: 16px;
+  align-items: end;
+  flex-wrap: wrap;
+}
+
+.field { display: flex; flex-direction: column; gap: 5px; }
+
+.field label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text3);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.field select, .field input[type="text"] {
+  padding: 8px 12px;
+  border-radius: var(--radius-xs);
+  border: 1px solid var(--border);
+  font-size: 12px;
+  background: var(--card);
+  color: var(--text);
+  font-family: inherit;
+  transition: border-color var(--transition);
+}
+
+.field select:focus, .field input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  cursor: pointer;
+  color: var(--text2);
+  transition: color var(--transition);
+}
+
+.checkbox-label:hover { color: var(--text); }
+
+.checkbox-label input[type="checkbox"] {
+  width: 15px; height: 15px;
+  accent-color: var(--accent);
+  border-radius: 4px;
+}
+
+/* ====== DNG OPTIONS ====== */
+.dng-panel {
+  margin-top: 14px;
+  padding: 14px 18px;
+  background: var(--accent-soft);
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(99,102,241,0.15);
+}
+
+.dng-panel .hint {
+  font-size: 11px;
+  color: var(--text3);
+  margin-top: 8px;
+  line-height: 1.5;
+}
+
+/* ====== PROGRESS ====== */
+.progress-bar {
+  width: 100%;
+  height: 6px;
+  background: var(--bg);
+  border-radius: 3px;
+  overflow: hidden;
+  margin: 10px 0;
+}
+
+.progress-bar .fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), var(--accent-hover));
+  border-radius: 3px;
+  transition: width 0.3s ease;
+  position: relative;
+}
+
+.progress-bar .fill::after {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
+
+.progress-text { font-size: 11px; color: var(--text2); }
+
+/* ====== ANALYSIS ====== */
+.analysis-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 16px;
+}
+
+.analysis-card {
+  background: var(--card);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.analysis-card .header {
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+  font-weight: 600;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.analysis-card .body { padding: 14px 18px; }
+
+.analysis-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.analysis-item:last-child { border-bottom: none; }
+
+.analysis-item img {
+  width: 44px; height: 44px;
+  border-radius: var(--radius-xs);
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.analysis-item .info { flex: 1; min-width: 0; }
+.analysis-item .info .name { font-size: 12px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.analysis-item .info .detail { font-size: 11px; color: var(--text3); margin-top: 2px; }
+
+.dup-group {
+  display: flex;
+  gap: 6px;
+  padding: 10px 0;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--border);
+}
+
+.dup-group:last-child { border-bottom: none; }
+
+.dup-group img {
+  width: 56px; height: 56px;
+  border-radius: var(--radius-xs);
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.a-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 10px;
+  color: white;
+}
+
+/* ====== EMPTY STATE ====== */
+.empty-state {
+  text-align: center;
+  padding: 48px 20px;
+  color: var(--text3);
+}
+
+.empty-state .icon {
+  width: 56px; height: 56px;
+  margin: 0 auto 16px;
+  background: var(--accent-soft);
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+}
+
+.empty-state h3 { font-size: 15px; margin-bottom: 6px; color: var(--text); }
+.empty-state p { font-size: 12px; line-height: 1.6; max-width: 300px; margin: 0 auto; }
+
+/* ====== LOADING ====== */
+.spinner {
+  display: inline-block;
+  width: 18px; height: 18px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.loading-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--overlay);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.loading-box {
+  background: var(--card);
+  padding: 36px 48px;
+  border-radius: 20px;
+  text-align: center;
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-lg);
+}
+
+.loading-box .spinner { width: 28px; height: 28px; }
+.loading-box p { margin-top: 14px; font-size: 13px; color: var(--text2); }
+
+/* ====== TOAST ====== */
+.toast-container {
+  position: fixed;
+  top: 20px; right: 20px;
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.toast {
+  padding: 12px 18px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 500;
+  color: white;
+  box-shadow: var(--shadow-lg);
+  animation: toastIn 0.35s cubic-bezier(0.21, 1.02, 0.73, 1);
+  max-width: 380px;
+  backdrop-filter: blur(12px);
+}
+
+.toast-success { background: rgba(52,211,153,0.9); color: #064e3b; }
+.toast-error { background: rgba(248,113,113,0.9); color: #450a0a; }
+.toast-info { background: rgba(99,102,241,0.9); }
+
+@keyframes toastIn {
+  from { transform: translateX(40px) scale(0.95); opacity: 0; }
+  to { transform: translateX(0) scale(1); opacity: 1; }
+}
+
+/* ====== SVG ICONS (inline) ====== */
+.icon-import { --d: "M12 16l-5-5h3V4h4v7h3l-5 5zm-7 2v2h14v-2H5z"; }
+.icon-analyze { --d: "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"; }
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <h1>Fovea</h1>
+    </div>
+    <div class="sidebar-nav">
+      <div class="nav-label">Workspace</div>
+      <div class="nav-item active" data-page="import" onclick="switchPage('import')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        <span>Import</span>
+      </div>
+      <div class="nav-item" data-page="analyze" onclick="switchPage('analyze')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/><path d="M11 8v6"/><path d="M8 11h6"/></svg>
+        <span>AI Analysis</span>
+      </div>
+
+      <div class="nav-label">Detected Sources</div>
+      <div id="source-list">
+        <div class="nav-item" style="font-size: 11px; color: var(--text3); pointer-events:none;">
+          <span class="spinner" style="width:14px;height:14px;border-width:1.5px;"></span>
+          <span>Detecting...</span>
+        </div>
+      </div>
+    </div>
+    <div class="sidebar-footer">
+      <button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()" title="Switch theme">
+        <svg id="theme-icon-sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="display:none;"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+        <svg id="theme-icon-moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        <span id="theme-label">Dark Mode</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Main Content -->
+  <div class="main">
+    <!-- ============ IMPORT PAGE ============ -->
+    <div id="page-import">
+      <div class="topbar">
+        <h2>Import Photos</h2>
+        <button class="btn btn-secondary btn-sm" onclick="refreshVolumes()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+          Refresh
+        </button>
+      </div>
+      <div class="content">
+        <!-- Step 1 -->
+        <div class="card">
+          <div class="card-header">
+            <h3><span class="step">1</span> Select Source</h3>
+          </div>
+          <div class="card-body">
+            <div class="volume-grid" id="volume-grid">
+              <div class="empty-state" style="grid-column:1/-1;">
+                <div class="icon">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M12 12h.01"/><path d="M17 12h.01"/></svg>
+                </div>
+                <h3>Detecting cameras...</h3>
+                <p>Insert an SD card or connect your camera via USB, then click Refresh.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 2 -->
+        <div class="card" id="file-browser-card" style="display:none;">
+          <div class="card-header">
+            <h3><span class="step">2</span> Select Files</h3>
+            <div id="scan-stats" style="font-size:11px; color:var(--text3);"></div>
+          </div>
+          <div class="card-body">
+            <div class="stats-bar" id="stats-bar"></div>
+            <div class="file-toolbar">
+              <div class="btn-group">
+                <button class="filter-btn active" data-filter="all" onclick="setFilter('all')">All</button>
+                <button class="filter-btn" data-filter="raw" onclick="setFilter('raw')">RAW</button>
+                <button class="filter-btn" data-filter="jpeg" onclick="setFilter('jpeg')">JPEG</button>
+                <button class="filter-btn" data-filter="video" onclick="setFilter('video')">Video</button>
+                <button class="filter-btn" data-filter="new" onclick="setFilter('new')">New Only</button>
+              </div>
+              <div style="margin-left:auto;" class="btn-group">
+                <button class="btn btn-ghost btn-sm" onclick="selectAll()">Select All</button>
+                <button class="btn btn-ghost btn-sm" onclick="selectNone()">Deselect</button>
+                <button class="btn btn-secondary btn-sm" onclick="selectSmart()">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+                  Smart Select
+                </button>
+              </div>
+            </div>
+            <div class="file-grid" id="file-grid"></div>
+          </div>
+        </div>
+
+        <!-- Step 3 -->
+        <div class="card" id="import-options-card" style="display:none;">
+          <div class="card-header">
+            <h3><span class="step">3</span> Import</h3>
+            <span id="selected-count" style="font-size:12px; color:var(--text2); font-weight:500;"></span>
+          </div>
+          <div class="card-body">
+            <div class="options-row">
+              <div class="field">
+                <label>Destination</label>
+                <select id="dest-select"></select>
+              </div>
+              <div class="field">
+                <label>Organize By</label>
+                <select id="organize-select">
+                  <option value="date">Date (YYYY/MM/DD)</option>
+                  <option value="event">Event Name</option>
+                </select>
+              </div>
+              <div class="field" id="event-name-field" style="display:none;">
+                <label>Event Name</label>
+                <input type="text" id="event-name" placeholder="e.g. Tokyo Trip">
+              </div>
+              <div class="field" style="justify-content:end;">
+                <label class="checkbox-label"><input type="checkbox" id="raw-subfolder"> RAW subfolder</label>
+              </div>
+              <div class="field" style="justify-content:end;">
+                <label class="checkbox-label"><input type="checkbox" id="skip-duplicates" checked> Skip duplicates</label>
+              </div>
+            </div>
+
+            <!-- DNG -->
+            <div class="dng-panel" id="dng-options" style="display:none;">
+              <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
+                <label class="checkbox-label" style="font-weight:600; color:var(--text);">
+                  <input type="checkbox" id="convert-dng" onchange="toggleDngSub()"> Convert RAW to DNG
+                </label>
+                <span style="font-size:11px;" id="dng-status-text"></span>
+                <div id="dng-sub-options" style="display:none; margin-left:8px; display:flex; gap:16px;">
+                  <label class="checkbox-label"><input type="checkbox" id="dng-compressed" checked> Lossless Compress</label>
+                  <label class="checkbox-label" title="Embed original RAW in DNG (2x file size, extractable later)">
+                    <input type="checkbox" id="dng-embed"> Embed Original
+                  </label>
+                </div>
+              </div>
+              <div class="hint">Open standard. Apple Photos, Lightroom, Capture One all read DNG natively. No sidecar files needed.</div>
+            </div>
+
+            <div style="margin-top:18px; display:flex; gap:10px; align-items:center;">
+              <button class="btn btn-primary" id="import-btn" onclick="startImport()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Start Import
+              </button>
+              <button class="btn btn-secondary" onclick="previewImport()">Preview</button>
+              <div id="import-progress-area" style="flex:1; display:none;">
+                <div class="progress-bar"><div class="fill" id="import-progress-fill" style="width:0"></div></div>
+                <div class="progress-text" id="import-progress-text"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ ANALYZE PAGE ============ -->
+    <div id="page-analyze" style="display:none;">
+      <div class="topbar">
+        <h2>AI Analysis</h2>
+        <div class="btn-group">
+          <button class="btn btn-secondary btn-sm" id="a-pause-btn" onclick="toggleAnalysisPause()" style="display:none;">Pause</button>
+          <button class="btn btn-secondary btn-sm" id="a-stop-btn" onclick="stopAnalysis()" style="display:none;">Stop</button>
+        </div>
+      </div>
+      <div class="content">
+        <!-- Status bar (always visible) -->
+        <div class="card" id="analysis-status-card">
+          <div class="card-body">
+            <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
+              <div id="a-status-dot" style="width:10px;height:10px;border-radius:50%;background:var(--text3);flex-shrink:0;"></div>
+              <div style="flex:1;">
+                <div style="font-weight:600; font-size:13px;" id="a-status-text">Idle</div>
+                <div style="font-size:11px; color:var(--text3); margin-top:2px;" id="a-status-detail">No photos analyzed yet</div>
+              </div>
+              <div class="btn-group">
+                <div class="field" style="min-width:180px;">
+                  <label>Scan Directory</label>
+                  <select id="analyze-dir-select"></select>
+                </div>
+                <button class="btn btn-secondary btn-sm" onclick="manualEnqueue()" style="margin-top:18px;" title="Manually add a directory to the queue">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                  Add
+                </button>
+              </div>
+            </div>
+            <div id="a-progress-bar" style="display:none; margin-top:12px;">
+              <div class="progress-bar"><div class="fill" id="a-progress-fill" style="width:0"></div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Results -->
+        <div id="analysis-results" style="display:none;">
+          <div class="stats-bar" id="analysis-stats" style="margin-bottom:20px;"></div>
+          <div class="card" id="scene-card" style="display:none;">
+            <div class="card-header"><h3>Scenes</h3></div>
+            <div class="card-body" id="scene-body"></div>
+          </div>
+          <div class="card" id="face-card" style="display:none;">
+            <div class="card-header"><h3>People</h3></div>
+            <div class="card-body" id="face-body"></div>
+          </div>
+          <div class="card" id="quality-card" style="display:none;">
+            <div class="card-header"><h3>Quality Issues</h3></div>
+            <div class="card-body" id="quality-body"></div>
+          </div>
+          <div class="card" id="similar-card" style="display:none;">
+            <div class="card-header"><h3>Similar / Duplicates</h3></div>
+            <div class="card-body" id="similar-body"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Loading -->
+<div class="loading-overlay" id="loading" style="display:none;">
+  <div class="loading-box">
+    <div class="spinner"></div>
+    <p id="loading-text">Scanning...</p>
+  </div>
+</div>
+
+<!-- Toasts -->
+<div class="toast-container" id="toast-container"></div>
+
+<script>
+// === State ===
+let scanResult = null;
+let currentFilter = 'all';
+let selectedSource = null;
+let destinations = [];
+let importInterval = null;
+
+// === Utils ===
+function formatSize(bytes) {
+  if (!bytes) return '\u2014';
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+  if (bytes < 1073741824) return (bytes / 1048576).toFixed(1) + ' MB';
+  return (bytes / 1073741824).toFixed(1) + ' GB';
+}
+
+function toast(msg, type = 'info') {
+  const c = document.getElementById('toast-container');
+  const t = document.createElement('div');
+  t.className = `toast toast-${type}`;
+  t.textContent = msg;
+  c.appendChild(t);
+  setTimeout(() => { t.style.opacity = '0'; t.style.transform = 'translateX(20px)'; t.style.transition = '0.3s'; }, 3500);
+  setTimeout(() => t.remove(), 3900);
+}
+
+function showLoading(text) {
+  document.getElementById('loading-text').textContent = text;
+  document.getElementById('loading').style.display = 'flex';
+}
+function hideLoading() { document.getElementById('loading').style.display = 'none'; }
+
+async function api(path, options = {}) {
+  const resp = await fetch(path, { headers: { 'Content-Type': 'application/json' }, ...options });
+  return resp.json();
+}
+
+// === Navigation ===
+function switchPage(page) {
+  document.querySelectorAll('.nav-item[data-page]').forEach(el => el.classList.toggle('active', el.dataset.page === page));
+  document.getElementById('page-import').style.display = page === 'import' ? '' : 'none';
+  document.getElementById('page-analyze').style.display = page === 'analyze' ? '' : 'none';
+  if (page === 'analyze') { loadAnalyzeDestinations(); startAnalysisPoller(); }
+}
+
+// === Volumes ===
+async function refreshVolumes() {
+  const data = await api('/api/volumes');
+  const grid = document.getElementById('volume-grid');
+  const sourceList = document.getElementById('source-list');
+
+  if (!data.volumes || data.volumes.length === 0) {
+    grid.innerHTML = `
+      <div class="empty-state" style="grid-column:1/-1;">
+        <div class="icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M12 12h.01"/></svg>
+        </div>
+        <h3>No Camera Detected</h3>
+        <p>Insert an SD card or connect your camera, then click Refresh.</p>
+      </div>`;
+    sourceList.innerHTML = '<div style="padding:8px 12px;font-size:11px;color:var(--text3);">None detected</div>';
+    loadDestinations();
+    return;
+  }
+
+  sourceList.innerHTML = '';
+  data.volumes.filter(v => v.is_camera).forEach(v => {
+    sourceList.innerHTML += `
+      <div class="nav-item" onclick="selectSource('${v.path}')">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="3"/></svg>
+        <span>${v.name}</span>
+        ${v.camera_brand !== 'unknown' ? `<span class="badge">${v.camera_brand.toUpperCase()}</span>` : ''}
+      </div>`;
+  });
+
+  grid.innerHTML = '';
+  data.volumes.forEach(v => {
+    const card = document.createElement('div');
+    card.className = `volume-card${selectedSource === v.path ? ' active' : ''}`;
+    card.onclick = () => selectSource(v.path);
+    card.innerHTML = `
+      <div class="name">${v.name}</div>
+      <div class="meta">
+        ${v.is_camera ? 'Camera / SD Card' : 'External Volume'}
+        ${v.total_space ? ` &middot; ${formatSize(v.free_space)} free` : ''}
+      </div>
+      ${v.camera_brand !== 'unknown' ? `<div class="brand-tag">${v.camera_brand}</div>` : ''}
+    `;
+    grid.appendChild(card);
+  });
+
+  loadDestinations();
+}
+
+async function loadDestinations() {
+  const data = await api('/api/destinations');
+  destinations = data.destinations || [];
+  const sel = document.getElementById('dest-select');
+  sel.innerHTML = '';
+  if (data.default) sel.innerHTML += `<option value="${data.default}">Default (${data.default})</option>`;
+  destinations.forEach(d => { sel.innerHTML += `<option value="${d.path}">${d.name} (${formatSize(d.free_space)} free)</option>`; });
+}
+
+async function loadAnalyzeDestinations() {
+  const data = await api('/api/destinations');
+  const sel = document.getElementById('analyze-dir-select');
+  sel.innerHTML = '';
+  if (data.default) sel.innerHTML += `<option value="${data.default}">${data.default}</option>`;
+  (data.destinations || []).forEach(d => { sel.innerHTML += `<option value="${d.path}">${d.name}</option>`; });
+}
+
+// === Scan ===
+async function selectSource(path) {
+  selectedSource = path;
+  document.querySelectorAll('.volume-card').forEach(c => c.classList.toggle('active', c.querySelector('.name')?.textContent === path.split('/').pop()));
+  showLoading('Scanning files...');
+  try {
+    scanResult = await api(`/api/scan?source=${encodeURIComponent(path)}`);
+    renderScanResult();
+    toast(`Found ${scanResult.total_files} files`, 'success');
+  } catch (e) { toast('Scan failed: ' + e.message, 'error'); }
+  hideLoading();
+}
+
+function renderScanResult() {
+  if (!scanResult) return;
+  document.getElementById('file-browser-card').style.display = '';
+  document.getElementById('import-options-card').style.display = '';
+
+  document.getElementById('stats-bar').innerHTML = `
+    <div class="stat"><div class="value">${scanResult.total_files}</div><div class="label">Total</div></div>
+    <div class="stat"><div class="value">${scanResult.raw_count}</div><div class="label">RAW</div></div>
+    <div class="stat"><div class="value">${scanResult.jpeg_count}</div><div class="label">JPEG</div></div>
+    <div class="stat"><div class="value">${scanResult.video_count}</div><div class="label">Video</div></div>
+    <div class="stat"><div class="value">${formatSize(scanResult.total_size)}</div><div class="label">Size</div></div>
+    ${scanResult.camera_model ? `<div class="stat"><div class="value" style="font-size:13px;">${scanResult.camera_model}</div><div class="label">Camera</div></div>` : ''}
+  `;
+  renderFileGrid();
+  updateSelectedCount();
+}
+
+function renderFileGrid() {
+  const grid = document.getElementById('file-grid');
+  grid.innerHTML = '';
+  if (!scanResult?.files) return;
+
+  let files = scanResult.files;
+  if (currentFilter === 'raw') files = files.filter(f => f.file_type === 'raw');
+  else if (currentFilter === 'jpeg') files = files.filter(f => f.file_type === 'jpeg');
+  else if (currentFilter === 'video') files = files.filter(f => f.file_type === 'video');
+  else if (currentFilter === 'new') files = files.filter(f => !f.already_imported);
+  if (currentFilter === 'all') files = files.filter(f => f.file_type !== 'system');
+
+  files.forEach(f => {
+    const origIdx = scanResult.files.indexOf(f);
+    const card = document.createElement('div');
+    card.className = `file-card${f.selected ? ' selected' : ''}${f.already_imported ? ' imported' : ''}`;
+    card.onclick = () => toggleFile(origIdx);
+    card.innerHTML = `
+      <div class="checkbox">${f.selected ? '\u2713' : ''}</div>
+      <div class="type-tag type-${f.file_type}">${f.file_type}</div>
+      <div class="thumb">
+        ${f.thumbnail_url
+          ? `<img src="${f.thumbnail_url}" loading="lazy">`
+          : `<div class="placeholder">${f.file_type === 'video' ? '\u25B6' : '\uD83D\uDCF7'}</div>`}
+      </div>
+      <div class="info">
+        <div class="name" title="${f.filename}">${f.filename}</div>
+        <div class="detail">${formatSize(f.size)}${f.already_imported ? ' \u00b7 Imported' : ''}${f.date_taken ? ' \u00b7 ' + new Date(f.date_taken).toLocaleDateString() : ''}</div>
+      </div>`;
+    grid.appendChild(card);
+  });
+
+  if (!files.length) grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1;"><h3>No files match</h3></div>`;
+}
+
+function toggleFile(idx) { scanResult.files[idx].selected = !scanResult.files[idx].selected; renderFileGrid(); updateSelectedCount(); }
+
+function setFilter(f) {
+  currentFilter = f;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.toggle('active', b.dataset.filter === f));
+  renderFileGrid();
+}
+
+function selectAll() { scanResult.files.forEach(f => { if (f.file_type !== 'system') f.selected = true; }); renderFileGrid(); updateSelectedCount(); }
+function selectNone() { scanResult.files.forEach(f => f.selected = false); renderFileGrid(); updateSelectedCount(); }
+
+function selectSmart() {
+  scanResult.files.forEach(f => {
+    if (f.file_type === 'system') f.selected = false;
+    else if (f.already_imported) f.selected = false;
+    else if (f.file_type === 'jpeg' && f.pair_file) f.selected = false;
+    else if (f.file_type === 'sidecar') f.selected = false;
+    else f.selected = true;
+  });
+  const sel = new Set(scanResult.files.filter(f => f.selected).map(f => f.path));
+  scanResult.files.forEach(f => { if (f.file_type === 'sidecar' && f.pair_file && sel.has(f.pair_file)) f.selected = true; });
+  renderFileGrid(); updateSelectedCount();
+  toast('Smart: RAW preferred, XMP follows pair, skip imported', 'info');
+}
+
+function updateSelectedCount() {
+  const s = scanResult?.files?.filter(f => f.selected) || [];
+  document.getElementById('selected-count').textContent = `${s.length} files (${formatSize(s.reduce((a, f) => a + f.size, 0))})`;
+}
+
+// === Import ===
+document.getElementById('organize-select').addEventListener('change', function() {
+  document.getElementById('event-name-field').style.display = this.value === 'event' ? '' : 'none';
+});
+
+function buildImportReq() {
+  const selected = scanResult.files.filter(f => f.selected);
+  return {
+    source_path: selectedSource,
+    destination_path: document.getElementById('dest-select').value,
+    file_paths: selected.map(f => f.path),
+    organize_by: document.getElementById('organize-select').value,
+    event_name: document.getElementById('event-name').value || null,
+    raw_subfolder: document.getElementById('raw-subfolder').checked,
+    skip_duplicates: document.getElementById('skip-duplicates').checked,
+    convert_to_dng: document.getElementById('convert-dng').checked,
+    dng_compressed: document.getElementById('dng-compressed').checked,
+    dng_embed_original: document.getElementById('dng-embed').checked,
+  };
+}
+
+async function previewImport() {
+  const selected = scanResult.files.filter(f => f.selected);
+  if (!selected.length) { toast('No files selected', 'error'); return; }
+  showLoading('Generating preview...');
+  try {
+    const data = await api('/api/import/preview', { method: 'POST', body: JSON.stringify(buildImportReq()) });
+    hideLoading();
+    const lines = (data.preview || []).slice(0, 20).map(p => `${p.filename}  \u2192  ${p.destination}`).join('\n');
+    const rest = (data.preview?.length || 0) - 20;
+    alert(`Import Preview:\n\n${lines}${rest > 0 ? `\n\n... and ${rest} more` : ''}`);
+  } catch (e) { hideLoading(); toast('Preview failed', 'error'); }
+}
+
+async function startImport() {
+  const selected = scanResult.files.filter(f => f.selected);
+  if (!selected.length) { toast('No files selected', 'error'); return; }
+
+  document.getElementById('import-btn').disabled = true;
+  document.getElementById('import-progress-area').style.display = '';
+
+  try {
+    await api('/api/import', { method: 'POST', body: JSON.stringify(buildImportReq()) });
+    toast('Import started', 'info');
+
+    importInterval = setInterval(async () => {
+      const p = await api('/api/import/progress');
+      const pct = p.total > 0 ? Math.round(p.completed / p.total * 100) : 0;
+      document.getElementById('import-progress-fill').style.width = pct + '%';
+      document.getElementById('import-progress-text').textContent = `${p.completed}/${p.total} ${p.current_file ? '\u2014 ' + p.current_file : ''} (${pct}%)`;
+
+      if (p.status === 'completed' || p.status === 'completed_with_errors') {
+        clearInterval(importInterval);
+        document.getElementById('import-btn').disabled = false;
+        document.getElementById('import-progress-fill').style.width = '100%';
+        toast(p.errors.length ? `Done with ${p.errors.length} errors` : `Imported ${p.completed} files!`, p.errors.length ? 'error' : 'success');
+      }
+    }, 500);
+  } catch (e) { toast('Import failed', 'error'); document.getElementById('import-btn').disabled = false; }
+}
+
+// === Analysis (background daemon) ===
+let analysisPoller = null;
+let lastAnalyzedCount = 0;
+
+async function manualEnqueue() {
+  const dir = document.getElementById('analyze-dir-select').value;
+  if (!dir) { toast('Select a directory', 'error'); return; }
+  await api('/api/analyze', { method: 'POST', body: JSON.stringify({ directory: dir }) });
+  toast('Added to analysis queue', 'info');
+}
+
+async function toggleAnalysisPause() {
+  const s = await api('/api/analyze/state');
+  if (s.status === 'running') {
+    await api('/api/analyze/pause', { method: 'POST' });
+    toast('Analysis paused', 'info');
+  } else {
+    await api('/api/analyze/resume', { method: 'POST' });
+    toast('Analysis resumed', 'info');
+  }
+}
+
+async function stopAnalysis() {
+  await api('/api/analyze/stop', { method: 'POST' });
+  toast('Analysis stopped, queue cleared', 'info');
+}
+
+function startAnalysisPoller() {
+  if (analysisPoller) return;
+  analysisPoller = setInterval(pollAnalysisState, 2000);
+  pollAnalysisState(); // immediate
+}
+
+async function pollAnalysisState() {
+  try {
+    const s = await api('/api/analyze/state');
+    updateAnalysisStatusUI(s);
+
+    // Refresh results when new photos are analyzed
+    if (s.analyzed > 0 && s.analyzed !== lastAnalyzedCount) {
+      lastAnalyzedCount = s.analyzed;
+      const results = await api('/api/analyze/results');
+      if (results.total > 0) renderAnalysisResults(results);
+    }
+  } catch (e) { /* ignore polling errors */ }
+}
+
+function updateAnalysisStatusUI(s) {
+  const dot = document.getElementById('a-status-dot');
+  const text = document.getElementById('a-status-text');
+  const detail = document.getElementById('a-status-detail');
+  const pauseBtn = document.getElementById('a-pause-btn');
+  const stopBtn = document.getElementById('a-stop-btn');
+  const progressBar = document.getElementById('a-progress-bar');
+
+  const statusMap = {
+    idle:      { color: 'var(--text3)',  label: 'Idle',                      showControls: false },
+    running:   { color: 'var(--success)', label: 'Analyzing...',             showControls: true  },
+    paused:    { color: 'var(--warning)', label: 'Paused',                   showControls: true  },
+    importing: { color: 'var(--accent)',  label: 'Paused (importing...)',    showControls: false },
+  };
+
+  const info = statusMap[s.status] || statusMap.idle;
+  dot.style.background = info.color;
+  if (s.status === 'running') dot.style.boxShadow = `0 0 8px ${info.color}`;
+  else dot.style.boxShadow = 'none';
+
+  text.textContent = info.label;
+  detail.textContent = `${s.analyzed} analyzed` +
+    (s.pending > 0 ? ` \u00b7 ${s.pending} pending` : '') +
+    (s.current_file ? ` \u00b7 ${s.current_file}` : '');
+
+  pauseBtn.style.display = info.showControls ? '' : 'none';
+  stopBtn.style.display = info.showControls ? '' : 'none';
+  pauseBtn.textContent = s.status === 'paused' ? 'Resume' : 'Pause';
+
+  if (s.pending > 0 && s.status === 'running') {
+    progressBar.style.display = '';
+    const total = s.analyzed + s.pending;
+    const pct = Math.round(s.analyzed / total * 100);
+    document.getElementById('a-progress-fill').style.width = pct + '%';
+  } else {
+    progressBar.style.display = 'none';
+  }
+}
+
+function renderAnalysisResults(r) {
+  document.getElementById('analysis-results').style.display = '';
+
+  // Stats
+  const sg = r.scene_groups || [], fg = r.face_groups || [], qi = r.quality_issues || [], si = r.similar_groups || [];
+  document.getElementById('analysis-stats').innerHTML = `
+    <div class="stat"><div class="value">${r.total}</div><div class="label">Photos</div></div>
+    <div class="stat"><div class="value">${sg.length}</div><div class="label">Scenes</div></div>
+    <div class="stat"><div class="value">${fg.length}</div><div class="label">People</div></div>
+    <div class="stat"><div class="value" style="color:var(--danger)">${qi.length}</div><div class="label">Issues</div></div>
+    <div class="stat"><div class="value" style="color:var(--warning)">${si.length}</div><div class="label">Duplicates</div></div>
+  `;
+
+  // Scenes
+  const sceneCard = document.getElementById('scene-card');
+  if (sg.length) {
+    sceneCard.style.display = '';
+    document.getElementById('scene-body').innerHTML = `
+      <div style="display:flex; flex-wrap:wrap; gap:10px;">
+        ${sg.map(s => `
+          <div style="background:var(--file-bg); border:1px solid var(--border); border-radius:var(--radius-sm); padding:12px 16px; min-width:140px; flex:1;">
+            <div style="font-size:20px; font-weight:700; color:var(--accent-hover);">${s.count}</div>
+            <div style="font-size:12px; font-weight:600; margin-top:2px;">${s.category}</div>
+            <div style="display:flex; gap:3px; margin-top:8px;">
+              ${(s.sample_thumbs || []).filter(Boolean).slice(0, 4).map(t => `<img src="${t}" style="width:32px;height:32px;border-radius:4px;object-fit:cover;">`).join('')}
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  } else { sceneCard.style.display = 'none'; }
+
+  // People
+  const faceCard = document.getElementById('face-card');
+  if (fg.length) {
+    faceCard.style.display = '';
+    document.getElementById('face-body').innerHTML = `
+      <div style="display:flex; flex-wrap:wrap; gap:12px;">
+        ${fg.map(f => `
+          <div style="background:var(--file-bg); border:1px solid var(--border); border-radius:var(--radius-sm); padding:14px; text-align:center; min-width:120px;">
+            <div style="display:flex; justify-content:center; gap:3px; margin-bottom:8px;">
+              ${(f.sample_thumbs || []).filter(Boolean).slice(0, 3).map(t => `<img src="${t}" style="width:40px;height:40px;border-radius:50%;object-fit:cover;border:2px solid var(--border);">`).join('')}
+            </div>
+            <div style="font-weight:600; font-size:13px;">Person ${f.person_id + 1}</div>
+            <div style="font-size:11px; color:var(--text3);">
+              ${f.count} photos
+              ${f.avg_age ? ` \u00b7 ~${f.avg_age}y` : ''}
+              ${f.gender ? ` \u00b7 ${f.gender}` : ''}
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  } else { faceCard.style.display = 'none'; }
+
+  // Quality issues
+  const qualCard = document.getElementById('quality-card');
+  if (qi.length) {
+    qualCard.style.display = '';
+    document.getElementById('quality-body').innerHTML = qi.map(q => `
+      <div class="analysis-item">
+        ${q.thumbnail_url ? `<img src="${q.thumbnail_url}">` : ''}
+        <div class="info">
+          <div class="name">${q.filename}</div>
+          <div class="detail">${q.detail}</div>
+        </div>
+        <span class="a-badge" style="background:${q.issue === 'blurry' ? 'var(--danger)' : 'var(--warning)'}; flex-shrink:0;">${q.issue_zh}</span>
+      </div>
+    `).join('');
+  } else { qualCard.style.display = 'none'; }
+
+  // Similar
+  const simCard = document.getElementById('similar-card');
+  if (si.length) {
+    simCard.style.display = '';
+    document.getElementById('similar-body').innerHTML = si.map(g => `
+      <div class="dup-group">
+        ${g.map(f => f.thumbnail_url ? `<img src="${f.thumbnail_url}" title="${f.filename}">` : `<div style="width:56px;height:56px;background:var(--file-bg);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:9px;color:var(--text3);">${f.filename}</div>`).join('')}
+        <div style="display:flex;align-items:center;font-size:11px;color:var(--text3);padding-left:8px;">${g.length} similar</div>
+      </div>
+    `).join('');
+  } else { simCard.style.display = 'none'; }
+}
+
+// === DNG ===
+function toggleDngSub() {
+  document.getElementById('dng-sub-options').style.display = document.getElementById('convert-dng').checked ? 'flex' : 'none';
+}
+
+async function checkDngStatus() {
+  const data = await api('/api/dng/status');
+  document.getElementById('dng-options').style.display = '';
+  const st = document.getElementById('dng-status-text');
+  if (data.available) {
+    st.textContent = data.native_available ? 'Native (open-source)' : 'Adobe DNG Converter';
+    st.style.color = 'var(--success)';
+    document.getElementById('convert-dng').disabled = false;
+  } else {
+    st.innerHTML = 'Install: <code style="background:var(--bg);padding:2px 6px;border-radius:4px;">pip install rawpy</code>';
+    st.style.color = 'var(--text3)';
+    document.getElementById('convert-dng').disabled = true;
+  }
+}
+
+// === Theme ===
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  localStorage.setItem('cm-theme', theme);
+  const isDark = theme === 'dark';
+  document.getElementById('theme-icon-sun').style.display = isDark ? 'block' : 'none';
+  document.getElementById('theme-icon-moon').style.display = isDark ? 'none' : 'block';
+  document.getElementById('theme-label').textContent = isDark ? 'Light Mode' : 'Dark Mode';
+}
+
+function toggleTheme() {
+  const current = document.documentElement.getAttribute('data-theme') || 'light';
+  applyTheme(current === 'dark' ? 'light' : 'dark');
+}
+
+// Init theme from localStorage or default to light
+applyTheme(localStorage.getItem('cm-theme') || 'light');
+
+// === Init ===
+refreshVolumes();
+checkDngStatus();
+</script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+fastapi>=0.104.0
+uvicorn>=0.24.0
+pillow>=10.0.0
+httpx>=0.25.0
+
+# Optional - install for full functionality:
+# rawpy>=0.19.0          # RAW file support (Sony ARW, Canon CR2/CR3, etc.)
+# opencv-python>=4.8.0   # Blur/exposure detection
+# imagehash>=4.3.0       # Duplicate photo detection
+# face-recognition>=1.3  # Face detection & clustering (requires dlib)
+# numpy>=1.24.0          # Required by opencv and face-recognition

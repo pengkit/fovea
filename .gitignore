@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+
+# Data (user-specific, not committed)
+data/
+thumbnails/
+
+# macOS
+.DS_Store
+._*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Models (downloaded at runtime)
+*.onnx
+*.pt
+*.bin
+*.safetensors

@@ -1,0 +1,39 @@
+[project]
+name = "fovea"
+version = "0.1.0"
+description = "Smart camera photo import, DNG conversion, and AI-powered organization"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.9"
+keywords = ["camera", "photo", "import", "dng", "raw", "ai", "clip", "face-recognition"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Multimedia :: Graphics",
+]
+
+dependencies = [
+    "fastapi>=0.104.0",
+    "uvicorn>=0.24.0",
+    "pillow>=10.0.0",
+    "httpx>=0.25.0",
+]
+
+[project.optional-dependencies]
+raw = ["rawpy>=0.19.0"]
+ai = [
+    "torch>=2.0.0",
+    "open-clip-torch>=2.24.0",
+    "insightface>=0.7.0",
+    "onnxruntime>=1.16.0",
+    "opencv-python>=4.8.0",
+]
+all = ["fovea[raw,ai]"]
+
+[project.scripts]
+fovea = "main:run"
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.backends._legacy:_Backend"
