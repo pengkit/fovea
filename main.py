@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, BackgroundTasks
 from fastapi.staticfiles import StaticFiles
+import os
 from fastapi.responses import FileResponse, JSONResponse
 
 from config import STATIC_DIR, THUMBNAIL_DIR, DEFAULT_DESTINATION
@@ -14,6 +15,8 @@ from scanner import list_volumes, list_destinations, scan_volume
 from importer import import_files, get_progress, preview_import
 from analyzer import run_analysis, get_analysis_state, get_analysis_results, get_daemon, describe_single
 from converter import get_dng_info
+from library import get_library_status, get_albums, get_photos, get_photo_path, get_cleanup_suggestions
+from adjustments import generate_adjustments, save_chosen_adjustment
 
 
 @asynccontextmanager
@@ -129,6 +132,50 @@ async def api_describe(request: DescribeRequest):
     """Tier 2: 对单张照片调用本地 VLM 生成详细描述"""
     result = await asyncio.to_thread(describe_single, request.filepath)
     return {"description": result}
+
+
+# === Photos Library API ===
+
+@app.get("/api/library/status")
+async def api_library_status():
+    return await asyncio.to_thread(get_library_status)
+
+
+@app.get("/api/library/albums")
+async def api_library_albums():
+    return {"albums": await asyncio.to_thread(get_albums)}
+
+
+@app.get("/api/library/photos")
+async def api_library_photos(album: str = None, limit: int = 100, offset: int = 0):
+    return await asyncio.to_thread(get_photos, album, limit, offset)
+
+
+@app.get("/api/library/photo")
+async def api_library_photo(uuid: str):
+    """Get raw image file for a photo (serve the actual file)."""
+    path = await asyncio.to_thread(get_photo_path, uuid)
+    if path and os.path.exists(path):
+        return FileResponse(path)
+    return JSONResponse({"error": "Photo not found"}, status_code=404)
+
+
+@app.get("/api/library/cleanup")
+async def api_library_cleanup(limit: int = 200):
+    return await asyncio.to_thread(get_cleanup_suggestions, limit)
+
+
+# === Adjustments API ===
+
+@app.get("/api/adjust")
+async def api_adjust(path: str):
+    """Generate 3 auto-adjustment variants for a photo."""
+    return await asyncio.to_thread(generate_adjustments, path)
+
+
+@app.post("/api/adjust/save")
+async def api_adjust_save(filepath: str, adjustment_url: str, mode: str = "both"):
+    return await asyncio.to_thread(save_chosen_adjustment, filepath, adjustment_url, mode)
 
 
 # === 文件浏览 API ===

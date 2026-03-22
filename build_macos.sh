@@ -121,43 +121,15 @@ cp -r static "$APP_DIR/Contents/Resources/src/"
 mkdir -p "$APP_DIR/Contents/Resources/src/data"
 mkdir -p "$APP_DIR/Contents/Resources/src/thumbnails"
 
-# ---- Create icon (simple placeholder using Python) ----
-echo "Generating icon..."
-python3 -c "
-from PIL import Image, ImageDraw, ImageFont
-import subprocess, tempfile, os
-
-sizes = [16, 32, 64, 128, 256, 512, 1024]
-iconset = tempfile.mkdtemp(suffix='.iconset')
-
-for s in sizes:
-    img = Image.new('RGBA', (s, s), (0, 0, 0, 0))
-    d = ImageDraw.Draw(img)
-    # Purple circle background
-    margin = int(s * 0.08)
-    d.ellipse([margin, margin, s-margin, s-margin], fill=(99, 102, 241))
-    # White 'F' letter
-    font_size = int(s * 0.5)
-    try:
-        font = ImageFont.truetype('/System/Library/Fonts/Helvetica.ttc', font_size)
-    except:
-        font = ImageFont.load_default()
-    bbox = d.textbbox((0, 0), 'F', font=font)
-    tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
-    d.text(((s - tw) / 2 - bbox[0], (s - th) / 2 - bbox[1]), 'F', fill='white', font=font)
-
-    img.save(os.path.join(iconset, f'icon_{s}x{s}.png'))
-    if s <= 512:
-        img2 = img.resize((s*2, s*2), Image.LANCZOS)
-        img2.save(os.path.join(iconset, f'icon_{s}x{s}@2x.png'))
-
-subprocess.run(['iconutil', '-c', 'icns', iconset, '-o', '$APP_DIR/Contents/Resources/fovea.icns'], check=True)
-print('Icon created')
-" 2>/dev/null && echo "Icon: OK" || echo "Icon: skipped (no Pillow)"
-
-# Update plist to reference icon if it exists
-if [ -f "$APP_DIR/Contents/Resources/fovea.icns" ]; then
+# ---- Copy icon ----
+if [ -f "fovea.icns" ]; then
+    cp fovea.icns "$APP_DIR/Contents/Resources/fovea.icns"
+    # Also copy to src so app.py can find it
+    cp fovea.icns "$APP_DIR/Contents/Resources/src/fovea.icns"
     /usr/libexec/PlistBuddy -c "Add :CFBundleIconFile string fovea" "$APP_DIR/Contents/Info.plist" 2>/dev/null || true
+    echo "Icon: OK"
+else
+    echo "Icon: fovea.icns not found, run build with icon_raw.png first"
 fi
 
 # ---- Ad-hoc code signing ----

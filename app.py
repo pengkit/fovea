@@ -53,6 +53,27 @@ def wait_for_server(port: int, timeout: float = 15.0):
     return False
 
 
+def _set_macos_app_identity():
+    """Make Python process show as 'Fovea' in Dock instead of 'Python'."""
+    try:
+        import AppKit
+        # Set app name in menubar
+        app = AppKit.NSApplication.sharedApplication()
+        # Load icon if available
+        icon_paths = [
+            os.path.join(os.path.dirname(__file__), '..', 'Resources', 'fovea.icns'),
+            os.path.join(os.path.dirname(__file__), 'fovea.icns'),
+        ]
+        for p in icon_paths:
+            if os.path.exists(p):
+                icon = AppKit.NSImage.alloc().initWithContentsOfFile_(os.path.abspath(p))
+                if icon:
+                    app.setApplicationIconImage_(icon)
+                break
+    except Exception:
+        pass  # Not critical
+
+
 def run_desktop():
     """Main entry point for the desktop app."""
     try:
@@ -62,6 +83,9 @@ def run_desktop():
         log.info("Falling back to browser mode...")
         run_browser_fallback()
         return
+
+    # Set macOS identity before creating window
+    _set_macos_app_identity()
 
     port = find_free_port()
     log.info(f"Starting Fovea on port {port}...")
@@ -88,7 +112,7 @@ def run_desktop():
 
     # Start webview (blocks until window is closed)
     webview.start(
-        gui='cocoa',       # Native macOS rendering
+        gui='cocoa',
         debug=False,
     )
 

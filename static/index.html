@@ -778,6 +778,14 @@ body {
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/><path d="M11 8v6"/><path d="M8 11h6"/></svg>
         <span>AI Analysis</span>
       </div>
+      <div class="nav-item" data-page="library" onclick="switchPage('library')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+        <span>Photos Library</span>
+      </div>
+      <div class="nav-item" data-page="cleanup" onclick="switchPage('cleanup')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+        <span>Cleanup</span>
+      </div>
 
       <div class="nav-label">Detected Sources</div>
       <div id="source-list">
@@ -977,6 +985,63 @@ body {
         </div>
       </div>
     </div>
+    <!-- ============ LIBRARY PAGE ============ -->
+    <div id="page-library" style="display:none;">
+      <div class="topbar">
+        <h2>Photos Library</h2>
+        <span id="lib-status" style="font-size:11px; color:var(--text3);"></span>
+      </div>
+      <div class="content">
+        <div id="lib-error" style="display:none;" class="card"><div class="card-body"><div class="empty-state" id="lib-error-msg"></div></div></div>
+        <div id="lib-albums" style="display:none;" class="card">
+          <div class="card-header"><h3>Albums</h3></div>
+          <div class="card-body" id="lib-albums-body"></div>
+        </div>
+        <div id="lib-photos-area">
+          <div class="file-toolbar">
+            <button class="filter-btn active" onclick="loadLibPhotos()">All</button>
+            <button class="filter-btn" onclick="loadLibPhotos('Favorites')">Favorites</button>
+            <span id="lib-photo-count" style="margin-left:auto; font-size:11px; color:var(--text3);"></span>
+          </div>
+          <div class="file-grid" id="lib-photo-grid"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ CLEANUP PAGE ============ -->
+    <div id="page-cleanup" style="display:none;">
+      <div class="topbar">
+        <h2>Cleanup</h2>
+      </div>
+      <div class="content">
+        <div class="card">
+          <div class="card-body" style="text-align:center;">
+            <button class="btn btn-primary" onclick="runCleanupScan()">Scan for Cleanup Suggestions</button>
+          </div>
+        </div>
+        <div id="cleanup-results" style="display:none;">
+          <div id="cleanup-list"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ ADJUSTMENT MODAL ============ -->
+    <div id="adjust-modal" style="display:none; position:fixed; inset:0; background:var(--overlay); backdrop-filter:blur(8px); z-index:150; display:none;">
+      <div style="max-width:900px; margin:40px auto; background:var(--card); border-radius:var(--radius); border:1px solid var(--border); box-shadow:var(--shadow-lg); overflow:hidden;">
+        <div style="padding:16px 20px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between;">
+          <h3 style="font-size:14px; font-weight:600;">Smart Adjust</h3>
+          <button class="btn btn-ghost btn-sm" onclick="closeAdjustModal()">Close</button>
+        </div>
+        <div style="padding:20px;">
+          <div id="adjust-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:12px;"></div>
+          <div id="adjust-actions" style="margin-top:16px; text-align:center; display:none;">
+            <button class="btn btn-primary" id="adjust-save-btn">Save Selected</button>
+            <button class="btn btn-secondary" onclick="closeAdjustModal()" style="margin-left:8px;">Cancel</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
   </div>
 </div>
 
@@ -1034,7 +1099,11 @@ function switchPage(page) {
   document.querySelectorAll('.nav-item[data-page]').forEach(el => el.classList.toggle('active', el.dataset.page === page));
   document.getElementById('page-import').style.display = page === 'import' ? '' : 'none';
   document.getElementById('page-analyze').style.display = page === 'analyze' ? '' : 'none';
+  document.getElementById('page-library').style.display = page === 'library' ? '' : 'none';
+  document.getElementById('page-cleanup').style.display = page === 'cleanup' ? '' : 'none';
   if (page === 'analyze') { loadAnalyzeDestinations(); startAnalysisPoller(); }
+  if (page === 'library') loadLibrary();
+
 }
 
 // === Volumes ===
@@ -1447,6 +1516,137 @@ async function checkDngStatus() {
     st.style.color = 'var(--text3)';
     document.getElementById('convert-dng').disabled = true;
   }
+}
+
+// === Library ===
+async function loadLibrary() {
+  const status = await api('/api/library/status');
+  document.getElementById('lib-status').textContent = status.available ? `${status.photo_count} photos` : '';
+
+  if (!status.available) {
+    document.getElementById('lib-error').style.display = '';
+    document.getElementById('lib-error-msg').innerHTML = `<h3>Photos Library Not Accessible</h3><p>${status.hint || status.error}</p>`;
+    return;
+  }
+  document.getElementById('lib-error').style.display = 'none';
+
+  // Load albums
+  const albumData = await api('/api/library/albums');
+  if (albumData.albums?.length) {
+    document.getElementById('lib-albums').style.display = '';
+    document.getElementById('lib-albums-body').innerHTML = `<div style="display:flex; flex-wrap:wrap; gap:8px;">${
+      albumData.albums.slice(0, 20).map(a => `<button class="filter-btn" onclick="loadLibPhotos('${a.title.replace(/'/g, "\\'")}')">${a.title} (${a.count})</button>`).join('')
+    }</div>`;
+  }
+
+  loadLibPhotos();
+}
+
+async function loadLibPhotos(album) {
+  const data = await api(`/api/library/photos?limit=80${album ? '&album=' + encodeURIComponent(album) : ''}`);
+  document.getElementById('lib-photo-count').textContent = `${data.total} photos${album ? ' in ' + album : ''}`;
+
+  const grid = document.getElementById('lib-photo-grid');
+  grid.innerHTML = '';
+
+  (data.photos || []).forEach(p => {
+    const card = document.createElement('div');
+    card.className = 'file-card';
+    card.onclick = () => openAdjustModal(p.path, p.filename);
+    card.innerHTML = `
+      <div class="thumb">
+        ${p.path ? `<img src="/api/library/photo?uuid=${p.uuid}" loading="lazy">` : '<div class="placeholder">iCloud</div>'}
+      </div>
+      <div class="info">
+        <div class="name" title="${p.filename}">${p.filename}</div>
+        <div class="detail">${p.date ? new Date(p.date).toLocaleDateString() : ''}${p.is_screenshot ? ' \u00b7 Screenshot' : ''}${p.is_selfie ? ' \u00b7 Selfie' : ''}</div>
+      </div>`;
+    grid.appendChild(card);
+  });
+}
+
+// === Adjustment Modal ===
+let currentAdjustPath = null;
+let selectedAdjustUrl = null;
+
+async function openAdjustModal(filepath, filename) {
+  if (!filepath) { toast('Photo not available locally', 'error'); return; }
+  currentAdjustPath = filepath;
+  document.getElementById('adjust-modal').style.display = '';
+  document.getElementById('adjust-grid').innerHTML = '<div style="text-align:center; grid-column:1/-1; padding:40px;"><div class="spinner"></div><p style="margin-top:12px; color:var(--text3);">Generating adjustments...</p></div>';
+  document.getElementById('adjust-actions').style.display = 'none';
+
+  const data = await api(`/api/adjust?path=${encodeURIComponent(filepath)}`);
+  if (data.error) { toast(data.error, 'error'); closeAdjustModal(); return; }
+
+  const grid = document.getElementById('adjust-grid');
+  const items = [
+    { url: data.original, name: 'Original', name_zh: 'Original', desc: 'No changes' },
+    ...(data.adjustments || []),
+  ];
+
+  grid.innerHTML = items.map((item, i) => `
+    <div class="adjust-option${i === 0 ? ' selected' : ''}" data-url="${item.url}" onclick="selectAdjustment(this, '${item.url}')" style="cursor:pointer; border:2px solid ${i === 0 ? 'var(--accent)' : 'var(--border)'}; border-radius:var(--radius-sm); overflow:hidden; transition:all var(--transition);">
+      <img src="${item.url}" style="width:100%; aspect-ratio:4/3; object-fit:cover;">
+      <div style="padding:10px;">
+        <div style="font-weight:600; font-size:12px;">${item.name_zh || item.name}</div>
+        <div style="font-size:10px; color:var(--text3);">${item.description || item.desc || ''}</div>
+      </div>
+    </div>
+  `).join('');
+
+  selectedAdjustUrl = data.original;
+  document.getElementById('adjust-actions').style.display = '';
+  document.getElementById('adjust-save-btn').onclick = () => saveAdjustment();
+}
+
+function selectAdjustment(el, url) {
+  document.querySelectorAll('.adjust-option').forEach(o => o.style.borderColor = 'var(--border)');
+  el.style.borderColor = 'var(--accent)';
+  selectedAdjustUrl = url;
+}
+
+async function saveAdjustment() {
+  if (!currentAdjustPath || !selectedAdjustUrl) return;
+  if (selectedAdjustUrl.includes('_original')) { closeAdjustModal(); toast('Kept original', 'info'); return; }
+  const data = await api(`/api/adjust/save?filepath=${encodeURIComponent(currentAdjustPath)}&adjustment_url=${encodeURIComponent(selectedAdjustUrl)}&mode=both`, { method: 'POST' });
+  if (data.saved) { toast(`Saved: ${data.saved.split('/').pop()}`, 'success'); }
+  closeAdjustModal();
+}
+
+function closeAdjustModal() {
+  document.getElementById('adjust-modal').style.display = 'none';
+  currentAdjustPath = null;
+}
+
+// === Cleanup ===
+async function runCleanupScan() {
+  showLoading('Scanning for cleanup suggestions...');
+  const data = await api('/api/library/cleanup?limit=500');
+  hideLoading();
+
+  const list = document.getElementById('cleanup-list');
+  document.getElementById('cleanup-results').style.display = '';
+
+  if (!data.suggestions?.length) {
+    list.innerHTML = '<div class="empty-state"><h3>No cleanup suggestions</h3><p>Your library looks clean!</p></div>';
+    return;
+  }
+
+  list.innerHTML = `<div style="margin-bottom:16px; font-size:13px; color:var(--text2);">${data.suggestions.length} suggestions from ${data.total_reviewed} reviewed</div>` +
+    data.suggestions.map(s => `
+      <div class="card" style="margin-bottom:8px;">
+        <div class="card-body" style="display:flex; align-items:center; gap:14px;">
+          <div style="flex:1; min-width:0;">
+            <div style="font-weight:500; font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${s.filename}</div>
+            <div style="font-size:11px; color:var(--text3); margin-top:2px;">${s.reason_text}${s.date ? ' \u00b7 ' + new Date(s.date).toLocaleDateString() : ''}</div>
+          </div>
+          <button class="btn btn-danger" style="padding:12px 24px; font-size:14px; flex-shrink:0;" onclick="this.closest('.card').style.opacity='0.3'; this.disabled=true; this.textContent='Marked';">
+            Delete
+          </button>
+        </div>
+      </div>
+    `).join('');
 }
 
 // === Theme ===
