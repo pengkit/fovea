@@ -386,6 +386,12 @@ def list_volumes() -> list[VolumeInfo]:
             # 跳过 macOS 系统卷
             if item.name in ("Macintosh HD", "Macintosh HD - Data", "com.apple.TimeMachine.localsnapshots"):
                 continue
+            # Skip DMG mount volumes and Fovea's own volumes
+            if item.name.startswith("Fovea") or item.name.startswith("com.apple."):
+                continue
+            # Skip read-only volumes (likely DMGs)
+            if not os.access(str(item), os.W_OK):
+                continue
 
             dcim = item / "DCIM"
             is_camera = dcim.exists() and dcim.is_dir()
@@ -440,6 +446,12 @@ def list_destinations() -> list[VolumeInfo]:
             if not item.is_dir():
                 continue
             if item.name in ("Macintosh HD", "Macintosh HD - Data", "com.apple.TimeMachine.localsnapshots"):
+                continue
+            # Skip DMG mount volumes and Fovea's own volumes
+            if item.name.startswith("Fovea") or item.name.startswith("com.apple."):
+                continue
+            # Skip read-only volumes (likely DMGs)
+            if not os.access(str(item), os.W_OK):
                 continue
             # 排除相机 SD 卡 (有 DCIM)
             if (item / "DCIM").exists():

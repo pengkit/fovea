@@ -38,7 +38,7 @@ cat > "$APP_DIR/Contents/Info.plist" << PLIST
     <key>CFBundleShortVersionString</key>
     <string>$APP_VERSION</string>
     <key>CFBundleExecutable</key>
-    <string>fovea-launcher</string>
+    <string>Fovea</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>LSMinimumSystemVersion</key>
@@ -47,6 +47,8 @@ cat > "$APP_DIR/Contents/Info.plist" << PLIST
     <true/>
     <key>LSUIElement</key>
     <false/>
+    <key>NSPhotoLibraryUsageDescription</key>
+    <string>Fovea needs access to your Photos to help you organize, analyze, and clean up your photo library.</string>
     <key>NSAppTransportSecurity</key>
     <dict>
         <key>NSAllowsLocalNetworking</key>
@@ -56,61 +58,15 @@ cat > "$APP_DIR/Contents/Info.plist" << PLIST
 </plist>
 PLIST
 
-# ---- Launcher script ----
-cat > "$APP_DIR/Contents/MacOS/fovea-launcher" << 'LAUNCHER'
-#!/bin/bash
-# Fovea launcher — sets up environment and starts the app
-
-DIR="$(cd "$(dirname "$0")/../Resources" && pwd)"
-VENV="$DIR/.venv"
-SRC="$DIR/src"
-LOG="/tmp/fovea-app.log"
-
-export PYTHONDONTWRITEBYTECODE=1
-
-# Find best Python (prefer Homebrew 3.11+ over system 3.9)
-PYTHON=""
-for p in /opt/homebrew/bin/python3 /usr/local/bin/python3 /usr/bin/python3; do
-    if [ -x "$p" ]; then
-        ver=$("$p" -c "import sys; print(sys.version_info.minor)" 2>/dev/null)
-        if [ "$ver" -ge 11 ] 2>/dev/null; then
-            PYTHON="$p"
-            break
-        fi
-    fi
-done
-# Fallback to whatever python3 is available
-[ -z "$PYTHON" ] && PYTHON=$(which python3)
-
-# Create venv if needed
-if [ ! -d "$VENV" ]; then
-    echo "First launch: setting up environment (Python: $PYTHON)..." > "$LOG"
-
-    osascript -e 'display notification "Setting up for first launch... This may take a minute." with title "Fovea"' 2>/dev/null
-
-    "$PYTHON" -m venv "$VENV" >> "$LOG" 2>&1
-
-    source "$VENV/bin/activate"
-
-    # Upgrade pip first
-    pip install -q --upgrade pip >> "$LOG" 2>&1
-
-    # Core deps
-    pip install -q fastapi uvicorn pillow httpx pywebview >> "$LOG" 2>&1
-
-    # RAW support
-    pip install -q rawpy >> "$LOG" 2>&1 || true
-
-    echo "Setup complete" >> "$LOG"
-else
-    source "$VENV/bin/activate"
-fi
-
-cd "$SRC"
-exec python3 app.py >> "$LOG" 2>&1
-LAUNCHER
-
-chmod +x "$APP_DIR/Contents/MacOS/fovea-launcher"
+# ---- Compile native Swift launcher ----
+echo "Compiling native app..."
+swiftc -O \
+    -o "$APP_DIR/Contents/MacOS/Fovea" \
+    -framework Cocoa \
+    -framework WebKit \
+    -framework Photos \
+    FoveaApp.swift
+echo "Compiled: OK"
 
 # ---- Copy source files ----
 echo "Copying source files..."

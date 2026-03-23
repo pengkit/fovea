@@ -1,18 +1,19 @@
 """Fovea - Configuration"""
 
+import os
 from pathlib import Path
 
 # === 路径配置 ===
 BASE_DIR = Path(__file__).parent
-DATA_DIR = BASE_DIR / "data"
-THUMBNAIL_DIR = BASE_DIR / "thumbnails"
+DATA_DIR = Path(os.environ.get("FOVEA_DATA_DIR", BASE_DIR / "data"))
+THUMBNAIL_DIR = Path(os.environ.get("FOVEA_THUMBNAIL_DIR", BASE_DIR / "thumbnails"))
 STATIC_DIR = BASE_DIR / "static"
 
 # macOS 外置卷挂载点
 VOLUME_PATHS = [Path("/Volumes")]
 
 # 默认导入目标
-DEFAULT_DESTINATION = Path.home() / "Pictures" / "Camera Imports"
+DEFAULT_DESTINATION = Path.home() / "Pictures" / "Fovea"
 
 # === 文件扩展名分类 ===
 RAW_EXTENSIONS = {
