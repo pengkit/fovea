@@ -3,30 +3,41 @@ import WebKit
 import Photos
 
 // ============================================================
-// Fovea - Native macOS App Shell
+// Fovea - Native macOS App Shell (Minimal & Robust)
 //
-// 1. Requests Photos access via PhotoKit (native dialog)
-// 2. Exports photo metadata to JSON (lightweight, no thumbnails yet)
-// 3. Generates thumbnails on-demand when Python requests them
-// 4. Runs a thumbnail server alongside the Python backend
+// Swift only does: window + webview + photos permission + metadata export
+// Python server is launched as a fully detached background process
 // ============================================================
+
+func logMsg(_ msg: String) {
+    let home = FileManager.default.homeDirectoryForCurrentUser
+    let logFile = home.appendingPathComponent(".fovea/swift.log")
+    let ts = ISO8601DateFormatter().string(from: Date())
+    let line = "[\(ts)] \(msg)\n"
+    if let handle = FileHandle(forWritingAtPath: logFile.path) {
+        handle.seekToEndOfFile()
+        handle.write(line.data(using: .utf8)!)
+        handle.closeFile()
+    } else {
+        FileManager.default.createFile(atPath: logFile.path, contents: line.data(using: .utf8))
+    }
+}
 
 class AppDelegate: NSObject, NSApplicationDelegate {
     var window: NSWindow!
     var webView: WKWebView!
-    var serverProcess: Process?
-    var setupProcess: Process?
     var thumbServer: ThumbnailServer?
 
     let foveaHome = FileManager.default.homeDirectoryForCurrentUser
         .appendingPathComponent(".fovea")
     var srcDir: String = ""
     let mainPort = 8080
-    let setupPort = 9999
-    let thumbPort = 9998  // Serves photo thumbnails on-demand
+    let thumbPort = 9998
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        logMsg("App starting")
         srcDir = findSrcDir()
+        logMsg("srcDir: \(srcDir)")
 
         let fm = FileManager.default
         try? fm.createDirectory(at: foveaHome, withIntermediateDirectories: true)
@@ -56,7 +67,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             NSApp.applicationIconImage = NSImage(contentsOfFile: iconPath)
         }
 
-        // WKWebView — disable native drag to prevent scroll issues
         let config = WKWebViewConfiguration()
         config.preferences.setValue(true, forKey: "allowFileAccessFromFileURLs")
         webView = WKWebView(frame: window.contentView!.bounds, configuration: config)
@@ -68,49 +78,188 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
 
-        // Request Photos access → export metadata → launch
-        requestPhotosAccess()
+        // Show loading with progress steps
+        let bg = isDarkMode() ? "#0f1117" : "#f5f5f7"
+        let fg = isDarkMode() ? "#e8eaed" : "#1d1d1f"
+        let fg2 = isDarkMode() ? "#565a6e" : "#9ca3af"
+        let accent = "#6366f1"
+        let loadingHtml = """
+        <html><head><style>
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .spinner { width:28px;height:28px;border:3px solid \(fg2);border-top-color:\(accent);border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto 16px; }
+        </style></head>
+        <body style='font-family:-apple-system;display:flex;align-items:center;justify-content:center;height:100vh;background:\(bg);color:\(fg);'>
+        <div style='text-align:center;'>
+          <div class='spinner'></div>
+          <p id='step' style='font-size:14px;font-weight:500;'>Starting...</p>
+          <p id='detail' style='font-size:11px;color:\(fg2);margin-top:6px;'></p>
+        </div></body></html>
+        """
+        webView.loadHTMLString(loadingHtml, baseURL: nil)
+        logMsg("Window created, loading shown")
+
+        // Everything else happens in background
+        DispatchQueue.global(qos: .userInitiated).async {
+            self.bootstrapApp()
+        }
     }
 
-    // ---- Photos Access ----
+    // ---- Bootstrap (runs on background thread) ----
 
-    func requestPhotosAccess() {
+    func updateStep(_ step: String, detail: String = "") {
+        let safeStep = step.replacingOccurrences(of: "'", with: "\\'")
+        let safeDetail = detail.replacingOccurrences(of: "'", with: "\\'")
+        DispatchQueue.main.async {
+            self.webView.evaluateJavaScript(
+                "document.getElementById('step').textContent='\(safeStep)';document.getElementById('detail').textContent='\(safeDetail)';",
+                completionHandler: nil
+            )
+        }
+    }
+
+    func bootstrapApp() {
+        // 1. Request Photos access
+        updateStep("Requesting Photos access...")
+        logMsg("Requesting Photos access")
+        let semaphore = DispatchSemaphore(value: 0)
+        var photosAuthorized = false
+
         PHPhotoLibrary.requestAuthorization(for: .readWrite) { status in
-            DispatchQueue.main.async {
-                switch status {
-                case .authorized, .limited:
-                    // Export metadata FIRST (synchronous on bg thread), THEN launch server
-                    DispatchQueue.global(qos: .userInitiated).async {
-                        self.doExportPhotoMetadata()
-                        // Start thumbnail server (serves images on-demand)
-                        self.thumbServer = ThumbnailServer(
-                            port: self.thumbPort,
-                            thumbDir: self.foveaHome.appendingPathComponent("thumbnails").path
-                        )
-                        self.thumbServer?.start()
-                        DispatchQueue.main.async {
-                            self.launchApp()
-                        }
-                    }
-                default:
-                    // No Photos access — still launch, library will show error
-                    self.launchApp()
-                }
+            photosAuthorized = (status == .authorized || status == .limited)
+            logMsg("Photos access: \(status.rawValue) authorized=\(photosAuthorized)")
+            semaphore.signal()
+        }
+        semaphore.wait()
+
+        // 2. Export photo metadata if authorized
+        if photosAuthorized {
+            updateStep("Reading Photos library...", detail: "This may take a moment")
+            logMsg("Exporting photo metadata")
+            doExportPhotoMetadata()
+            logMsg("Photo metadata exported")
+
+            updateStep("Starting thumbnail service...")
+            thumbServer = ThumbnailServer(
+                port: thumbPort,
+                thumbDir: foveaHome.appendingPathComponent("thumbnails").path
+            )
+            thumbServer?.start()
+            logMsg("Thumbnail server started on port \(thumbPort)")
+        }
+
+        // 3. Check if venv exists
+        let venvPython = foveaHome.appendingPathComponent("venv/bin/python3").path
+        if !FileManager.default.fileExists(atPath: venvPython) {
+            logMsg("No venv found, running first-time setup")
+            runFirstTimeSetup()
+            return
+        }
+
+        // 4. Start Python server
+        updateStep("Starting server...")
+        logMsg("Starting Python server")
+        startPythonServer()
+
+        // 5. Wait for server
+        updateStep("Almost ready...", detail: "Waiting for server")
+        logMsg("Waiting for server on port \(mainPort)")
+        let ready = waitForServer(port: mainPort, timeout: 25.0)
+        logMsg("Server ready: \(ready)")
+
+        // 6. Load the page
+        DispatchQueue.main.async {
+            if ready {
+                logMsg("Loading main page")
+                self.webView.load(URLRequest(url: URL(string: "http://127.0.0.1:\(self.mainPort)")!))
+            } else {
+                logMsg("Server timeout, showing error")
+                let html = "<html><body style='font-family:-apple-system;display:flex;align-items:center;justify-content:center;height:100vh;background:#f5f5f7;'><div style='text-align:center;'><h2>Error</h2><p>Server failed to start. Check ~/.fovea/swift.log</p></div></body></html>"
+                self.webView.loadHTMLString(html, baseURL: nil)
             }
         }
     }
 
-    func launchApp() {
-        let fm = FileManager.default
-        let venvPath = foveaHome.appendingPathComponent("venv")
-        if fm.fileExists(atPath: venvPath.path) {
-            startMainServer()
-        } else {
-            runFirstTimeSetup()
+    // ---- Start Python server as detached process ----
+
+    func startPythonServer() {
+        let logPath = foveaHome.appendingPathComponent("fovea.log").path
+        // Launch via bash, nohup + & to fully detach from this process
+        let script = """
+        lsof -ti:\(mainPort) | xargs kill -9 2>/dev/null
+        sleep 0.3
+        source "\(foveaHome.path)/venv/bin/activate"
+        cd "\(srcDir)"
+        export FOVEA_DATA_DIR="\(foveaHome.path)/data"
+        export FOVEA_THUMBNAIL_DIR="\(foveaHome.path)/thumbnails"
+        export PYTHONDONTWRITEBYTECODE=1
+        nohup python3 -c "import uvicorn; from main import app; uvicorn.run(app, host='127.0.0.1', port=\(mainPort), log_level='warning')" >> "\(logPath)" 2>&1 &
+        """
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/bash")
+        process.arguments = ["-c", script]
+        // Don't store reference — fire and forget
+        do { try process.run() } catch {
+            logMsg("Failed to start Python server: \(error)")
+        }
+        logMsg("Python server launch command sent")
+    }
+
+    // ---- First-time Setup ----
+
+    func runFirstTimeSetup() {
+        let python = findPython()
+        let setupScript = srcDir + "/setup_server.py"
+        let setupPort = 9999
+
+        logMsg("Running setup: \(python) \(setupScript)")
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: python)
+        process.arguments = [setupScript, String(mainPort), String(setupPort)]
+        process.currentDirectoryURL = URL(fileURLWithPath: srcDir)
+
+        var env = ProcessInfo.processInfo.environment
+        env["PYTHONDONTWRITEBYTECODE"] = "1"
+        env["FOVEA_DATA_DIR"] = foveaHome.appendingPathComponent("data").path
+        env["FOVEA_THUMBNAIL_DIR"] = foveaHome.appendingPathComponent("thumbnails").path
+        process.environment = env
+
+        let log = foveaHome.appendingPathComponent("fovea.log")
+        FileManager.default.createFile(atPath: log.path, contents: nil)
+        if let logHandle = FileHandle(forWritingAtPath: log.path) {
+            process.standardOutput = logHandle
+            process.standardError = logHandle
+        }
+
+        do { try process.run() } catch {
+            logMsg("Setup failed: \(error)")
+            DispatchQueue.main.async {
+                let html = "<html><body style='font-family:-apple-system;display:flex;align-items:center;justify-content:center;height:100vh;'><div><h2>Setup Error</h2><p>\(error)</p></div></body></html>"
+                self.webView.loadHTMLString(html, baseURL: nil)
+            }
+            return
+        }
+
+        // Show setup UI
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            self.webView.load(URLRequest(url: URL(string: "http://127.0.0.1:\(setupPort)")!))
+        }
+
+        // Wait for setup to finish, then start main server
+        process.waitUntilExit()
+        logMsg("Setup finished with exit code \(process.terminationStatus)")
+        startPythonServer()
+
+        let ready = waitForServer(port: mainPort, timeout: 25.0)
+        DispatchQueue.main.async {
+            if ready {
+                self.webView.load(URLRequest(url: URL(string: "http://127.0.0.1:\(self.mainPort)")!))
+            }
         }
     }
 
-    // ---- Photo Metadata Export (lightweight, no thumbnails) ----
+    // ---- Photo Metadata Export ----
 
     func doExportPhotoMetadata() {
         let outputPath = foveaHome.appendingPathComponent("data/photos_library.json")
@@ -129,7 +278,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 "height": asset.pixelHeight,
                 "is_favorite": asset.isFavorite,
                 "is_hidden": asset.isHidden,
-                // Thumbnail URL: on-demand via the thumbnail server
                 "thumb_url": "http://127.0.0.1:\(self.thumbPort)/thumb?id=\(asset.localIdentifier.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")",
             ]
 
@@ -149,7 +297,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             photos.append(info)
         }
 
-        // Albums
         var albums: [[String: Any]] = []
         let albumFetch = PHAssetCollection.fetchAssetCollections(with: .album, subtype: .any, options: nil)
         albumFetch.enumerateObjects { (col: PHAssetCollection, _: Int, _: UnsafeMutablePointer<ObjCBool>) in
@@ -195,91 +342,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    // ---- First-time Setup ----
-
-    func runFirstTimeSetup() {
-        let python = findPython()
-        let setupScript = srcDir + "/setup_server.py"
-
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: python)
-        process.arguments = [setupScript, String(mainPort), String(setupPort)]
-        process.currentDirectoryURL = URL(fileURLWithPath: srcDir)
-        process.environment = buildEnv()
-
-        let log = foveaHome.appendingPathComponent("fovea.log")
-        let logHandle = FileHandle(forWritingAtPath: log.path) ?? {
-            FileManager.default.createFile(atPath: log.path, contents: nil)
-            return FileHandle(forWritingAtPath: log.path)!
-        }()
-        logHandle.seekToEndOfFile()
-        process.standardOutput = logHandle
-        process.standardError = logHandle
-        setupProcess = process
-
-        do { try process.run() } catch {
-            showError("Failed to start setup: \(error)")
-            return
-        }
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-            self.webView.load(URLRequest(url: URL(string: "http://127.0.0.1:\(self.setupPort)")!))
-        }
-
-        DispatchQueue.global(qos: .userInitiated).async {
-            process.waitUntilExit()
-            DispatchQueue.main.async { self.startMainServer() }
-        }
-    }
-
-    // ---- Main Server ----
-
-    func startMainServer() {
-        let venvPython = foveaHome.appendingPathComponent("venv/bin/python3").path
-
-        guard FileManager.default.fileExists(atPath: venvPython) else {
-            showError("Python environment not found. Delete ~/.fovea and restart.")
-            return
-        }
-
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: venvPython)
-        process.arguments = [
-            "-c",
-            "import uvicorn; from main import app; uvicorn.run(app, host='127.0.0.1', port=\(mainPort), log_level='warning')"
-        ]
-        process.currentDirectoryURL = URL(fileURLWithPath: srcDir)
-        process.environment = buildEnv()
-
-        let log = foveaHome.appendingPathComponent("fovea.log")
-        if let logHandle = FileHandle(forWritingAtPath: log.path) {
-            logHandle.seekToEndOfFile()
-            process.standardOutput = logHandle
-            process.standardError = logHandle
-        }
-
-        serverProcess = process
-        do { try process.run() } catch {
-            showError("Failed to start server: \(error)")
-            return
-        }
-
-        DispatchQueue.global(qos: .userInitiated).async {
-            self.waitForServer(port: self.mainPort, timeout: 15.0)
-            DispatchQueue.main.async {
-                self.webView.load(URLRequest(url: URL(string: "http://127.0.0.1:\(self.mainPort)")!))
-            }
-        }
-    }
-
     // ---- Helpers ----
 
-    func buildEnv() -> [String: String] {
-        var env = ProcessInfo.processInfo.environment
-        env["PYTHONDONTWRITEBYTECODE"] = "1"
-        env["FOVEA_DATA_DIR"] = foveaHome.appendingPathComponent("data").path
-        env["FOVEA_THUMBNAIL_DIR"] = foveaHome.appendingPathComponent("thumbnails").path
-        return env
+    func isDarkMode() -> Bool {
+        if let appearance = NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) {
+            return appearance == .darkAqua
+        }
+        return false
     }
 
     func findSrcDir() -> String {
@@ -289,8 +358,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 return candidate
             }
         }
-        let cwd = FileManager.default.currentDirectoryPath
-        return cwd
+        return FileManager.default.currentDirectoryPath
     }
 
     func findPython() -> String {
@@ -300,27 +368,25 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         return "/usr/bin/python3"
     }
 
-    func waitForServer(port: Int, timeout: Double = 15.0) {
+    func waitForServer(port: Int, timeout: Double = 15.0) -> Bool {
         let start = Date()
         while Date().timeIntervalSince(start) < timeout {
             if let url = URL(string: "http://127.0.0.1:\(port)/"),
-               let _ = try? Data(contentsOf: url) { return }
+               let _ = try? Data(contentsOf: url) { return true }
             Thread.sleep(forTimeInterval: 0.3)
         }
+        return false
     }
 
-    func showError(_ message: String) {
-        DispatchQueue.main.async {
-            let html = "<html><body style='font-family:-apple-system;display:flex;align-items:center;justify-content:center;height:100vh;background:#f5f5f7;'><div style='text-align:center;'><h2>Error</h2><p>\(message)</p></div></body></html>"
-            self.webView.loadHTMLString(html, baseURL: nil)
-        }
-    }
-
-    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
 
     func applicationWillTerminate(_ notification: Notification) {
-        serverProcess?.terminate()
-        setupProcess?.terminate()
+        // Kill the Python server when app quits
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/bash")
+        process.arguments = ["-c", "lsof -ti:\(mainPort) | xargs kill -9 2>/dev/null"]
+        try? process.run()
+        process.waitUntilExit()
         thumbServer?.stop()
     }
 }
@@ -328,10 +394,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
 // ============================================================
 // On-demand Thumbnail Server
-//
-// Serves photo thumbnails via PhotoKit when requested.
-// Only generates a thumbnail when a specific photo is viewed.
-// Caches to disk so each photo is only processed once.
 // ============================================================
 
 class ThumbnailServer {
@@ -391,7 +453,6 @@ class ThumbnailServer {
 
         let request = String(bytes: buffer[0..<n], encoding: .utf8) ?? ""
 
-        // Parse: GET /thumb?id=XXXXX HTTP/1.1
         if let idRange = request.range(of: "id="),
            let endRange = request.range(of: " HTTP", range: idRange.upperBound..<request.endIndex) {
             let rawId = String(request[idRange.upperBound..<endRange.lowerBound])
@@ -416,7 +477,6 @@ class ThumbnailServer {
     }
 
     func getThumbnail(for localIdentifier: String) -> Data? {
-        // Check cache first
         let cacheKey = localIdentifier.replacingOccurrences(of: "/", with: "_")
             .replacingOccurrences(of: ":", with: "_")
         let cachePath = thumbDir + "/" + cacheKey + ".jpg"
@@ -425,7 +485,6 @@ class ThumbnailServer {
             return try? Data(contentsOf: URL(fileURLWithPath: cachePath))
         }
 
-        // Fetch from PhotoKit
         let fetchResult = PHAsset.fetchAssets(withLocalIdentifiers: [localIdentifier], options: nil)
         guard let asset = fetchResult.firstObject else { return nil }
 
@@ -433,7 +492,7 @@ class ThumbnailServer {
         options.isSynchronous = true
         options.deliveryMode = .fastFormat
         options.resizeMode = .fast
-        options.isNetworkAccessAllowed = true  // Allow downloading from iCloud
+        options.isNetworkAccessAllowed = true
 
         var resultData: Data?
         let targetSize = CGSize(width: 400, height: 400)
@@ -443,11 +502,9 @@ class ThumbnailServer {
             contentMode: .aspectFill, options: options
         ) { image, _ in
             if let image = image {
-                let rect = NSRect(origin: .zero, size: image.size)
                 guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return }
                 let rep = NSBitmapImageRep(cgImage: cgImage)
                 if let jpeg = rep.representation(using: .jpeg, properties: [.compressionFactor: 0.75]) {
-                    // Cache to disk
                     try? jpeg.write(to: URL(fileURLWithPath: cachePath))
                     resultData = jpeg
                 }

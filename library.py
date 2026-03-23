@@ -86,8 +86,22 @@ def get_photos(
 
     photos = data.get("photos", [])
 
-    # Filter by album (basic - just by name match since we don't have per-album photo lists in the cache)
-    # TODO: enhance Swift export to include per-album photo UUIDs
+    # Filter by smart album attributes
+    if album:
+        album_lower = album.lower()
+        if 'favorite' in album_lower:
+            photos = [p for p in photos if p.get("is_favorite")]
+        elif 'screenshot' in album_lower:
+            photos = [p for p in photos if p.get("is_screenshot")]
+        elif 'selfie' in album_lower or 'self' in album_lower:
+            photos = [p for p in photos if p.get("is_selfie")]
+        elif 'live' in album_lower:
+            photos = [p for p in photos if p.get("is_live")]
+        elif 'hidden' in album_lower:
+            photos = [p for p in photos if p.get("is_hidden")]
+        elif 'recent' in album_lower:
+            photos = sorted(photos, key=lambda p: p.get("date", ""), reverse=True)[:200]
+        # For user albums, we don't have per-album data yet — show all
 
     # Sort
     if sort_by == "date_desc":

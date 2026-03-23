@@ -26,3 +26,4 @@ thumbnails/
 *.pt
 *.bin
 *.safetensors
+node_modules/

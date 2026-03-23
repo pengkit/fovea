@@ -186,21 +186,79 @@ async def api_browse(path: str):
     if not p.exists() or not p.is_dir():
         return JSONResponse({"error": "目录不存在"}, status_code=404)
 
+    IMAGE_EXTS = {'.jpg', '.jpeg', '.png', '.heic', '.tif', '.tiff',
+                  '.dng', '.arw', '.cr2', '.cr3', '.nef', '.raf', '.rw2', '.orf', '.pef'}
     items = []
     try:
         for item in sorted(p.iterdir()):
             if item.name.startswith("."):
                 continue
-            items.append({
+            info = {
                 "name": item.name,
                 "path": str(item),
                 "is_dir": item.is_dir(),
                 "size": item.stat().st_size if item.is_file() else None,
-            })
+            }
+            if item.is_file() and item.suffix.lower() in IMAGE_EXTS:
+                info["thumb_url"] = f"/api/thumb?path={item}"
+            items.append(info)
     except PermissionError:
         return JSONResponse({"error": "权限不足"}, status_code=403)
 
     return {"path": str(p), "items": items}
+
+
+@app.get("/api/thumb")
+async def api_thumb(path: str):
+    """Generate and serve a thumbnail for a local image file."""
+    import hashlib
+    from PIL import Image
+    import io
+
+    src = Path(path)
+    if not src.exists() or not src.is_file():
+        return JSONResponse({"error": "File not found"}, status_code=404)
+
+    # Cache key based on path + mtime
+    cache_key = hashlib.md5(f"{src}:{src.stat().st_mtime}".encode()).hexdigest()
+    cache_path = THUMBNAIL_DIR / f"{cache_key}.jpg"
+
+    if cache_path.exists():
+        return FileResponse(str(cache_path), media_type="image/jpeg",
+                           headers={"Cache-Control": "max-age=86400"})
+
+    # Generate thumbnail
+    try:
+        img = await asyncio.to_thread(_make_thumbnail, src)
+        img.save(str(cache_path), "JPEG", quality=80)
+        return FileResponse(str(cache_path), media_type="image/jpeg",
+                           headers={"Cache-Control": "max-age=86400"})
+    except Exception:
+        return JSONResponse({"error": "Cannot generate thumbnail"}, status_code=500)
+
+
+def _make_thumbnail(src: Path):
+    from PIL import Image
+    THUMB_SIZE = (300, 300)
+    ext = src.suffix.lower()
+
+    if ext in {'.arw', '.cr2', '.cr3', '.nef', '.raf', '.rw2', '.orf', '.pef', '.dng'}:
+        # Try rawpy for RAW files
+        try:
+            import rawpy
+            with rawpy.imread(str(src)) as raw:
+                rgb = raw.postprocess(use_camera_wb=True, half_size=True)
+            img = Image.fromarray(rgb)
+        except ImportError:
+            # Fallback: try embedded JPEG preview
+            img = Image.open(src)
+    else:
+        img = Image.open(src)
+
+    img.thumbnail(THUMB_SIZE, Image.LANCZOS)
+    if img.mode != 'RGB':
+        img = img.convert('RGB')
+    return img
 
 
 if __name__ == "__main__":
