@@ -272,66 +272,6 @@ def test_dng_conversion(sd_path: str):
     print("  PASS")
 
 
-def test_quality_detection(sd_path: str):
-    """Test: blur and exposure detection."""
-    print("\n=== TEST: Quality Detection ===")
-    try:
-        import cv2
-    except ImportError:
-        print("  SKIP (opencv not installed)")
-        return
-
-    from analyzer import PhotoAnalyzer
-    analyzer = PhotoAnalyzer()
-
-    dcim = Path(sd_path) / "DCIM" / "100MSDCF"
-
-    # Test blur detection
-    blurry_result = analyzer._quality_analyze(Image.open(dcim / "DSC00003.JPG"))
-    assert blurry_result['is_blurry'], f"DSC00003 should be blurry, score={blurry_result['blur_score']}"
-    print(f"  Blur: DSC00003 detected as blurry (score={blurry_result['blur_score']})")
-
-    # Normal photo should not be blurry
-    normal_result = analyzer._quality_analyze(Image.open(dcim / "DSC00001.JPG"))
-    assert not normal_result['is_blurry'], f"DSC00001 should not be blurry, score={normal_result['blur_score']}"
-    print(f"  Blur: DSC00001 correctly detected as sharp (score={normal_result['blur_score']})")
-
-    # Overexposed detection
-    over_result = analyzer._quality_analyze(Image.open(dcim / "DSC00004.JPG"))
-    assert over_result['is_overexposed'], f"DSC00004 should be overexposed"
-    print(f"  Exposure: DSC00004 detected as overexposed ({over_result['overexposed_ratio']:.1%})")
-
-    print("  PASS")
-
-
-def test_clip_analysis(sd_path: str):
-    """Test: CLIP scene classification."""
-    print("\n=== TEST: CLIP Scene Analysis ===")
-    try:
-        import torch
-        import open_clip
-    except ImportError:
-        print("  SKIP (torch/open_clip not installed)")
-        return
-
-    from analyzer import PhotoAnalyzer
-    analyzer = PhotoAnalyzer()
-
-    dcim = Path(sd_path) / "DCIM" / "100MSDCF"
-
-    # Landscape
-    result = analyzer.analyze_photo(str(dcim / "DSC00001.JPG"))
-    print(f"  DSC00001 (landscape): scene={result['scene']}, tags={[t[0] for t in result['tags'][:3]]}")
-    assert result['scene'] is not None, "Should have a scene classification"
-    assert result['clip_embedding'] is not None, "Should have CLIP embedding"
-
-    # Night
-    result = analyzer.analyze_photo(str(dcim / "DSC00007.JPG"))
-    print(f"  DSC00007 (night):     scene={result['scene']}, tags={[t[0] for t in result['tags'][:3]]}")
-
-    print("  PASS")
-
-
 def test_incremental_import(sd_path: str, scan_result):
     """Test: importing the same files twice should skip duplicates."""
     print("\n=== TEST: Incremental Import ===")
@@ -383,8 +323,6 @@ def main():
         scan_result = test_scanner(sd_path)
         test_importer(sd_path, scan_result)
         test_dng_conversion(sd_path)
-        test_quality_detection(sd_path)
-        test_clip_analysis(sd_path)
         test_incremental_import(sd_path, scan_result)
 
         print("\n" + "=" * 50)

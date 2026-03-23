@@ -10,10 +10,9 @@ import os
 from fastapi.responses import FileResponse, JSONResponse
 
 from config import STATIC_DIR, THUMBNAIL_DIR, DEFAULT_DESTINATION
-from models import ImportRequest, AnalysisRequest, DescribeRequest
+from models import ImportRequest
 from scanner import list_volumes, list_destinations, scan_volume
 from importer import import_files, get_progress, preview_import
-from analyzer import run_analysis, get_analysis_state, get_analysis_results, get_daemon, describe_single
 from converter import get_dng_info
 from library import get_library_status, get_albums, get_photos, get_photo_path, get_cleanup_suggestions
 from adjustments import generate_adjustments, save_chosen_adjustment
@@ -87,52 +86,6 @@ async def api_import(request: ImportRequest, background_tasks: BackgroundTasks):
 async def api_import_progress():
     progress = get_progress()
     return progress.model_dump()
-
-
-# === 分析 API (unified) ===
-
-@app.post("/api/analyze")
-async def api_analyze(request: AnalysisRequest):
-    """手动触发：扫描目录并加入分析队列"""
-    run_analysis(request.directory)
-    return {"status": "enqueued"}
-
-
-@app.get("/api/analyze/state")
-async def api_analyze_state():
-    """后台分析状态（进度、pending 等）"""
-    return get_analysis_state()
-
-
-@app.get("/api/analyze/results")
-async def api_analyze_results():
-    """获取聚合分析结果"""
-    return await asyncio.to_thread(get_analysis_results)
-
-
-@app.post("/api/analyze/pause")
-async def api_analyze_pause():
-    get_daemon().pause()
-    return {"status": "paused"}
-
-
-@app.post("/api/analyze/resume")
-async def api_analyze_resume():
-    get_daemon().resume()
-    return {"status": "resumed"}
-
-
-@app.post("/api/analyze/stop")
-async def api_analyze_stop():
-    get_daemon().stop()
-    return {"status": "stopped"}
-
-
-@app.post("/api/describe")
-async def api_describe(request: DescribeRequest):
-    """Tier 2: 对单张照片调用本地 VLM 生成详细描述"""
-    result = await asyncio.to_thread(describe_single, request.filepath)
-    return {"description": result}
 
 
 # === Photos Library API ===

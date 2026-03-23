@@ -1,134 +1,112 @@
 # Fovea
 
-Smart camera photo import, open-format conversion, and AI-powered organization.
+A native macOS app for camera photo import, RAW processing, and library management.
 
-**Fovea** automates everything after you press the shutter — import from SD card, convert to open DNG format, organize by date, and let local AI quietly analyze your photos in the background.
+## The Problem
 
-## Why
+Getting photos off a camera and into a usable state is still surprisingly painful in 2026:
 
-Importing photos from a camera is still painful:
-- SD cards have messy folder structures mixed with system files
-- RAW formats are proprietary and vendor-locked
-- Organizing hundreds of photos by hand is tedious
-- Finding duplicates, blurry shots, and similar photos takes time
+- **RAW formats are a mess.** Sony shoots ARW, Canon uses CR2/CR3, Nikon has NEF, Fujifilm does RAF — each a proprietary format that only the vendor's own software handles well. You're locked into their ecosystem the moment you press the shutter.
+- **SD card structures are chaotic.** Nested DCIM folders, system files (AVCHD, THM, BDM), sidecar XMPs — you have to know what to keep and what to skip.
+- **Apple Photos can't read most RAW files natively.** It supports some (like CR3 and DNG), but many formats require third-party codecs. And once imported, your RAW files are buried inside the opaque Photos Library package.
+- **Adobe's DNG format is the closest thing to a universal standard.** It's open, readable by every major editor (Lightroom, Capture One, darktable, Apple Photos), and preserves full RAW quality. But converting to DNG is manual and tedious.
 
-Fovea solves all of this in one self-hosted web app.
+Fovea automates the entire pipeline: detect camera → scan files → preview → convert RAW to DNG → organize by date → manage your library.
 
 ## Features
 
 ### Smart Import
 - Auto-detect cameras and SD cards (Sony, Canon, Nikon, Fujifilm, Olympus, Panasonic)
-- Classify files by type — RAW, JPEG, Video, Sidecar, System files
-- RAW + JPEG pairing with Smart Select (pick the best, skip the rest)
-- XMP sidecar files automatically follow their paired photos
+- Classify files by type — RAW, JPEG, Video, Sidecar, System
+- RAW + JPEG pairing with Smart Select
+- XMP sidecar files follow their paired photos automatically
 - Incremental import — never duplicate what's already been imported
 - EXIF extraction — date, camera model, lens, ISO, aperture, shutter speed
 
-### Open Format (DNG)
-- Convert proprietary RAW (ARW, CR2, CR3, NEF, RAF...) to open-standard DNG
+### RAW Processing
+- Convert proprietary RAW to open-standard DNG on import
 - Three conversion backends:
   - [**dnglab**](https://github.com/dnglab/dnglab) — open-source Rust converter (recommended)
-  - **Adobe DNG Converter** — optional proprietary fallback
-  - **Native Python** — rawpy-based, zero external dependency
-- DNG is readable by Apple Photos, Lightroom, Capture One, darktable, and every major photo editor
-- No more vendor lock-in. No more sidecar files.
+  - **Adobe DNG Converter** — proprietary fallback
+  - **rawpy/LibRaw** — Python fallback, zero external dependency
+- Apple Core Image rendering for RAW preview and adjustments (auto/vivid/warm presets)
+- DNG is readable everywhere: Apple Photos, Lightroom, Capture One, darktable
 
-### Smart Organization
-- Auto-organize by date: `YYYY/MM/YYYYMMDD/`
-- Or by event name: `2026/03/Tokyo Trip/`
-- Optional RAW subfolder separation
-- Target any drive — local SSD, external HDD, NAS
+### Photo Library
+- Timeline view with date headers, sorted newest-first
+- iCloud Photos integration — browse and view your full Apple Photos library
+- Photo adjustments powered by Apple Core Image (same engine as Photos.app)
+- Rotation support with adjustment saving
+- Soft delete with 30-day trash and restore
+- Send photos to iCloud Photos directly from the app
+- Batch operations — select multiple photos for delete or iCloud upload
 
-### Background AI Analysis
-- **Runs automatically** after import — no manual trigger needed
-- Processes photos one by one in idle time (3s throttle, gentle on CPU)
-- **Pauses during import**, resumes after — never competes for resources
-- Pause / Resume / Stop controls in UI
-- Results persist across restarts
+### Native macOS App
+- Swift shell with WKWebView — feels native, runs local
+- Python FastAPI backend (port 8080) for all server-side logic
+- Swift ThumbnailServer (port 9998) for Core Image RAW rendering
+- Builds to a standard `.app` bundle distributed as DMG
+- Light and dark theme
 
-#### AI Capabilities (all local, no cloud)
-| Engine | What it does |
-|--------|-------------|
-| [OpenCLIP](https://github.com/mlfoundations/open_clip) ViT-B/32 | Scene classification, semantic tagging, similarity/duplicate detection |
-| [InsightFace](https://github.com/deepinsight/insightface) ArcFace | Face detection, recognition, clustering by person |
-| OpenCV | Blur detection, over/under-exposure analysis |
-| Moondream 2 *(optional, on-demand)* | Detailed natural language photo descriptions |
+## Install
 
-### Web UI
-- Clean, responsive interface with light/dark theme
-- Works on any browser — manage your photos from phone, tablet, or desktop
-- File preview with thumbnails, EXIF info, and type filtering
-- Real-time import progress and analysis status
+Download the latest DMG from [Releases](https://github.com/pengkit/fovea/releases), open it, and drag Fovea to Applications.
 
-## Quick Start
+First launch takes ~1 minute to set up the Python environment.
+
+### Optional: DNG Conversion
 
 ```bash
-# Clone
-git clone https://github.com/peng/fovea.git
-cd fovea
-
-# Install
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-
-# Optional: DNG conversion (recommended)
 brew install dnglab
-
-# Optional: AI analysis
-pip install torch open-clip-torch insightface onnxruntime opencv-python
-
-# Run
-python3 main.py
-# Open http://localhost:8080
 ```
 
-Or use the quick start script:
+## Build from Source
+
 ```bash
-./run.sh
+git clone https://github.com/pengkit/fovea.git
+cd fovea
+bash build_macos.sh
+# DMG is in build/Fovea-0.1.0-macOS.dmg
 ```
 
-## Dependencies
-
-**Core** (required):
-- Python 3.9+
-- FastAPI, uvicorn, Pillow, httpx
-
-**DNG Conversion** (pick one):
-- `dnglab` — `brew install dnglab` *(recommended)*
-- `rawpy` — `pip install rawpy` *(Python fallback)*
-- Adobe DNG Converter *(optional)*
-
-**AI Analysis** (optional):
-- PyTorch, OpenCLIP, InsightFace, ONNX Runtime, OpenCV
-- ~1GB disk for models (auto-downloaded on first run)
-- ~1GB RAM during analysis
-- Apple Silicon MPS acceleration supported
+Requires: macOS, Xcode command line tools, Python 3.9+.
 
 ## Architecture
 
 ```
-SD Card ──→ Scanner ──→ Web UI (preview & select)
+SD Card ──→ Scanner ──→ Preview & Select (Web UI)
                               │
                               ▼
                         Smart Import
-                        ├── DNG Conversion (dnglab / Adobe / native)
-                        ├── Date-based organization
+                        ├── DNG Conversion (dnglab / Adobe / rawpy)
+                        ├── Date-based organization (YYYY/MM/DD/)
                         └── Copy with verification
                               │
                               ▼
-                     Background AI Daemon
-                     ├── CLIP: scene tags + similarity
-                     ├── InsightFace: face clustering
-                     └── OpenCV: quality checks
+                     Fovea Library (~/Pictures/Fovea/)
+                     ├── Timeline view
+                     ├── Core Image adjustments
+                     ├── Soft delete / restore
+                     └── Send to iCloud Photos
 ```
 
-## Credits
+### Tech Stack
+- **Swift**: App shell (WKWebView), PhotoKit integration, Core Image RAW rendering
+- **Python**: FastAPI server, scanner, importer, DNG converter, thumbnail generator
+- **Frontend**: Single-page HTML/CSS/JS in `static/index.html`
 
-See [CREDITS.md](CREDITS.md) for full attribution.
+## Why DNG?
 
-Built on the shoulders of [dnglab](https://github.com/dnglab/dnglab), [OpenCLIP](https://github.com/mlfoundations/open_clip), [InsightFace](https://github.com/deepinsight/insightface), [rawpy/LibRaw](https://github.com/letmaik/rawpy), and many other open-source projects.
-
-Inspired by [Immich](https://github.com/immich-app/immich), [PhotoPrism](https://github.com/photoprism/photoprism), [Rapid Photo Downloader](https://github.com/damonlynch/rapid-photo-downloader), and [fastdup](https://github.com/visual-layer/fastdup).
+| | Proprietary RAW (ARW, CR3, NEF...) | Adobe DNG |
+|---|---|---|
+| Readable by | Vendor software + some editors | Everything |
+| Open standard | No | Yes (public spec) |
+| Apple Photos | Partial support | Full support |
+| Lightroom | Yes | Yes |
+| darktable | Yes | Yes |
+| File size | Varies | Similar (lossless compressed) |
+| Metadata | EXIF + vendor-specific | EXIF + XMP embedded |
+| Future-proof | Depends on vendor | Open spec, widely adopted |
 
 ## License
 

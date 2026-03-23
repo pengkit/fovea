@@ -81,14 +81,6 @@ class ImportProgress(BaseModel):
     imported_files: list[str] = []
 
 
-class AnalysisRequest(BaseModel):
-    directory: str
-
-
-class DescribeRequest(BaseModel):
-    filepath: str
-
-
 class VolumeInfo(BaseModel):
     path: str
     name: str

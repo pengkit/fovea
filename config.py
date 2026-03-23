@@ -91,13 +91,3 @@ ORGANIZE_PATTERN = "{year}/{month:02d}/{day:02d}"
 # === 缩略图 ===
 THUMBNAIL_SIZE = (300, 300)
 THUMBNAIL_QUALITY = 80
-
-# === AI 分析 ===
-OLLAMA_URL = "http://localhost:11434"
-OLLAMA_VISION_MODEL = "llava"
-
-# 废片检测阈值
-BLUR_THRESHOLD = 100.0          # Laplacian 方差，低于此值判定为模糊
-OVEREXPOSURE_THRESHOLD = 0.3    # 高亮像素占比超过此值判定为过曝
-UNDEREXPOSURE_THRESHOLD = 0.3   # 暗部像素占比超过此值判定为欠曝
-DUPLICATE_HASH_THRESHOLD = 5    # 感知哈希差异，小于此值判定为重复

@@ -48,7 +48,7 @@ cat > "$APP_DIR/Contents/Info.plist" << PLIST
     <key>LSUIElement</key>
     <false/>
     <key>NSPhotoLibraryUsageDescription</key>
-    <string>Fovea needs access to your Photos to help you organize, analyze, and clean up your photo library.</string>
+    <string>Fovea needs access to your Photos to display and manage your photo library.</string>
     <key>NSAppTransportSecurity</key>
     <dict>
         <key>NSAllowsLocalNetworking</key>
@@ -110,8 +110,3 @@ echo "DMG:  $BUILD_DIR/$DMG_NAME"
 echo ""
 echo "To install: open the DMG and drag Fovea to Applications."
 echo "First launch will take ~1 minute to set up the Python environment."
-echo ""
-echo "To add AI analysis support after install, open Terminal and run:"
-echo "  cd /Applications/Fovea.app/Contents/Resources"
-echo "  source .venv/bin/activate"
-echo "  pip install torch open-clip-torch insightface onnxruntime opencv-python"

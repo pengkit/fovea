@@ -129,11 +129,6 @@ def import_files(request: ImportRequest) -> ImportProgress:
     """执行文件导入"""
     global _import_progress
 
-    # Pause background analysis during import
-    from analyzer import get_daemon
-    daemon = get_daemon()
-    daemon.notify_import_start()
-
     _import_progress = ImportProgress(
         total=len(request.file_paths),
         status="running",
@@ -223,9 +218,6 @@ def import_files(request: ImportRequest) -> ImportProgress:
     _import_progress.completed = len(request.file_paths)
     _import_progress.status = "completed" if not _import_progress.errors else "completed_with_errors"
     _import_progress.current_file = ""
-
-    # Resume background analysis and enqueue imported files
-    daemon.notify_import_done(_import_progress.imported_files)
 
     return _import_progress
 
