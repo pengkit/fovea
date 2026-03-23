@@ -15,7 +15,7 @@ import threading
 import time
 import socket
 
-FOVEA_HOME = os.path.join(os.path.expanduser("~"), ".fovea")
+FOVEA_HOME = os.path.join(os.path.expanduser("~"), "Library", "Application Support", "Fovea")
 VENV_DIR = os.path.join(FOVEA_HOME, "venv")
 STATUS_FILE = os.path.join(FOVEA_HOME, "setup_status.json")
 LOG_FILE = os.path.join(FOVEA_HOME, "fovea.log")

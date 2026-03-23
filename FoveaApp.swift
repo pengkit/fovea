@@ -1,6 +1,7 @@
 import Cocoa
 import WebKit
 import Photos
+import CoreImage
 
 // ============================================================
 // Fovea - Native macOS App Shell (Minimal & Robust)
@@ -11,7 +12,7 @@ import Photos
 
 func logMsg(_ msg: String) {
     let home = FileManager.default.homeDirectoryForCurrentUser
-    let logFile = home.appendingPathComponent(".fovea/swift.log")
+    let logFile = home.appendingPathComponent("Library/Application Support/Fovea/swift.log")
     let ts = ISO8601DateFormatter().string(from: Date())
     let line = "[\(ts)] \(msg)\n"
     if let handle = FileHandle(forWritingAtPath: logFile.path) {
@@ -29,7 +30,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var thumbServer: ThumbnailServer?
 
     let foveaHome = FileManager.default.homeDirectoryForCurrentUser
-        .appendingPathComponent(".fovea")
+        .appendingPathComponent("Library/Application Support/Fovea")
     var srcDir: String = ""
     let mainPort = 8080
     let thumbPort = 9998
@@ -69,7 +70,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         let config = WKWebViewConfiguration()
         config.preferences.setValue(true, forKey: "allowFileAccessFromFileURLs")
+        config.websiteDataStore = WKWebsiteDataStore.default()
         webView = WKWebView(frame: window.contentView!.bounds, configuration: config)
+
+        // Clear HTTP cache to prevent stale thumbnails
+        let cacheTypes: Set<String> = [WKWebsiteDataTypeDiskCache, WKWebsiteDataTypeMemoryCache]
+        WKWebsiteDataStore.default().removeData(ofTypes: cacheTypes, modifiedSince: .distantPast) {
+            logMsg("WKWebView cache cleared")
+        }
         webView.autoresizingMask = [.width, .height]
         webView.setValue(false, forKey: "drawsBackground")
         webView.allowsBackForwardNavigationGestures = false
@@ -173,7 +181,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 self.webView.load(URLRequest(url: URL(string: "http://127.0.0.1:\(self.mainPort)")!))
             } else {
                 logMsg("Server timeout, showing error")
-                let html = "<html><body style='font-family:-apple-system;display:flex;align-items:center;justify-content:center;height:100vh;background:#f5f5f7;'><div style='text-align:center;'><h2>Error</h2><p>Server failed to start. Check ~/.fovea/swift.log</p></div></body></html>"
+                let html = "<html><body style='font-family:-apple-system;display:flex;align-items:center;justify-content:center;height:100vh;background:#f5f5f7;'><div style='text-align:center;'><h2>Error</h2><p>Server failed to start. Check ~/Library/Application Support/Fovea/swift.log</p></div></body></html>"
                 self.webView.loadHTMLString(html, baseURL: nil)
             }
         }
@@ -293,6 +301,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             info["is_screenshot"] = asset.mediaSubtypes.contains(.photoScreenshot)
             info["is_live"] = asset.mediaSubtypes.contains(.photoLive)
             info["is_burst"] = asset.representsBurst
+
+            // Location
+            if let loc = asset.location {
+                info["latitude"] = loc.coordinate.latitude
+                info["longitude"] = loc.coordinate.longitude
+            }
 
             photos.append(info)
         }
@@ -452,28 +466,105 @@ class ThumbnailServer {
         guard n > 0 else { close(client); return }
 
         let request = String(bytes: buffer[0..<n], encoding: .utf8) ?? ""
+        let params = parseQuery(request)
 
-        if let idRange = request.range(of: "id="),
-           let endRange = request.range(of: " HTTP", range: idRange.upperBound..<request.endIndex) {
-            let rawId = String(request[idRange.upperBound..<endRange.lowerBound])
-            let photoId = rawId.removingPercentEncoding ?? rawId
-
-            if let jpegData = getThumbnail(for: photoId) {
-                let header = "HTTP/1.1 200 OK\r\nContent-Type: image/jpeg\r\nContent-Length: \(jpegData.count)\r\nAccess-Control-Allow-Origin: *\r\nCache-Control: max-age=86400\r\n\r\n"
-                send(client, header, header.utf8.count, 0)
-                jpegData.withUnsafeBytes { ptr in
-                    send(client, ptr.baseAddress, jpegData.count, 0)
+        // Route: /addtolib?path=XXX (Add file to iCloud Photos)
+        if request.contains("GET /addtolib") {
+            if let path = params["path"] {
+                let (success, errorMsg) = addToPhotoLibrary(path: path)
+                if success {
+                    sendJSON(client, json: "{\"ok\":true}")
+                } else {
+                    let escaped = (errorMsg ?? "Unknown error")
+                        .replacingOccurrences(of: "\\", with: "\\\\")
+                        .replacingOccurrences(of: "\"", with: "\\\"")
+                    sendJSON(client, json: "{\"error\":\"\(escaped)\"}")
                 }
             } else {
-                let resp = "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n"
-                send(client, resp, resp.utf8.count, 0)
+                sendJSON(client, json: "{\"error\":\"missing path parameter\"}")
+            }
+            close(client)
+            return
+        }
+
+        // Route: /raw?path=XXX (Core Image RAW render from file)
+        if request.contains("GET /raw") {
+            if let path = params["path"] {
+                let preset = params["preset"] ?? "default"
+                let maxW = Int(params["w"] ?? "2000") ?? 2000
+                if let jpegData = renderRAW(path: path, preset: preset, maxWidth: maxW) {
+                    sendJpeg(client, data: jpegData)
+                } else {
+                    send404(client)
+                }
+            } else {
+                send400(client)
+            }
+            close(client)
+            return
+        }
+
+        // Route: /thumb?id=XXX or /full?id=XXX (PhotoKit)
+        let isFull = request.contains("GET /full")
+
+        if let photoId = params["id"] {
+            let jpegData = isFull ? getFullImage(for: photoId) : getThumbnail(for: photoId)
+            if let jpegData = jpegData {
+                sendJpeg(client, data: jpegData)
+            } else {
+                send404(client)
             }
         } else {
-            let resp = "HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\n\r\n"
-            send(client, resp, resp.utf8.count, 0)
+            send400(client)
         }
 
         close(client)
+    }
+
+    func parseQuery(_ request: String) -> [String: String] {
+        // Parse GET /path?key=val&key2=val2 HTTP/1.1
+        guard let qRange = request.range(of: "?"),
+              let endRange = request.range(of: " HTTP", range: qRange.upperBound..<request.endIndex) else {
+            return [:]
+        }
+        let queryString = String(request[qRange.upperBound..<endRange.lowerBound])
+        var result: [String: String] = [:]
+        for pair in queryString.split(separator: "&") {
+            let parts = pair.split(separator: "=", maxSplits: 1)
+            if parts.count == 2 {
+                let key = String(parts[0])
+                let val = String(parts[1]).removingPercentEncoding ?? String(parts[1])
+                result[key] = val
+            }
+        }
+        return result
+    }
+
+    func sendJpeg(_ client: Int32, data: Data) {
+        let header = "HTTP/1.1 200 OK\r\nContent-Type: image/jpeg\r\nContent-Length: \(data.count)\r\nAccess-Control-Allow-Origin: *\r\nCache-Control: max-age=86400\r\n\r\n"
+        send(client, header, header.utf8.count, 0)
+        data.withUnsafeBytes { ptr in
+            send(client, ptr.baseAddress, data.count, 0)
+        }
+    }
+
+    func send404(_ client: Int32) {
+        let resp = "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nAccess-Control-Allow-Origin: *\r\n\r\n"
+        send(client, resp, resp.utf8.count, 0)
+    }
+
+    func send400(_ client: Int32) {
+        let resp = "HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\n\r\n"
+        send(client, resp, resp.utf8.count, 0)
+    }
+
+    func sendJSON(_ client: Int32, json: String) {
+        let body = json.data(using: .utf8)!
+        let header = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: \(body.count)\r\nAccess-Control-Allow-Origin: *\r\n\r\n"
+        send(client, header, header.utf8.count, 0)
+        body.withUnsafeBytes { ptr in
+            send(client, ptr.baseAddress, body.count, 0)
+        }
     }
 
     func getThumbnail(for localIdentifier: String) -> Data? {
@@ -508,6 +599,145 @@ class ThumbnailServer {
                     try? jpeg.write(to: URL(fileURLWithPath: cachePath))
                     resultData = jpeg
                 }
+            }
+        }
+
+        return resultData
+    }
+
+    // ---- Core Image Rendering ----
+    // All image adjustments use Apple's native Core Image engine
+    // Same quality as Photos.app for both RAW and JPEG/PNG/HEIC
+
+    let ciContext = CIContext(options: [.useSoftwareRenderer: false])
+
+    let rawExtensions: Set<String> = ["arw", "cr2", "cr3", "nef", "raf", "rw2", "orf", "pef", "dng"]
+
+    func renderRAW(path: String, preset: String, maxWidth: Int) -> Data? {
+        let url = URL(fileURLWithPath: path)
+        guard FileManager.default.fileExists(atPath: path) else { return nil }
+
+        let ext = url.pathExtension.lowercased()
+        let isRAW = rawExtensions.contains(ext)
+
+        // Load image
+        var ciImage: CIImage?
+        if isRAW {
+            // RAW: use CIFilter which auto-applies camera profile
+            if let filter = CIFilter(imageURL: url, options: [:]) {
+                ciImage = filter.outputImage
+            }
+        } else {
+            // JPEG/PNG/HEIC: load directly
+            ciImage = CIImage(contentsOf: url)
+        }
+
+        guard var output = ciImage else { return nil }
+
+        // Apply preset
+        switch preset {
+        case "auto":
+            // Apple's ML-based auto enhance — same as Photos.app "Auto" button
+            let adjustments = output.autoAdjustmentFilters()
+            for filter in adjustments {
+                filter.setValue(output, forKey: kCIInputImageKey)
+                if let result = filter.outputImage { output = result }
+            }
+
+        case "vivid":
+            // Smart vibrance + shadow lift
+            if let vibrance = CIFilter(name: "CIVibrance") {
+                vibrance.setValue(output, forKey: kCIInputImageKey)
+                vibrance.setValue(0.8, forKey: "inputAmount")
+                if let r = vibrance.outputImage { output = r }
+            }
+            if let shadow = CIFilter(name: "CIHighlightShadowAdjust") {
+                shadow.setValue(output, forKey: kCIInputImageKey)
+                shadow.setValue(0.4, forKey: "inputShadowAmount")
+                shadow.setValue(0.9, forKey: "inputHighlightAmount")
+                if let r = shadow.outputImage { output = r }
+            }
+
+        case "warm":
+            // Warm tone + slight saturation boost
+            if let temp = CIFilter(name: "CITemperatureAndTint") {
+                temp.setValue(output, forKey: kCIInputImageKey)
+                temp.setValue(CIVector(x: 6800, y: 0), forKey: "inputNeutral")
+                if let r = temp.outputImage { output = r }
+            }
+            if let color = CIFilter(name: "CIColorControls") {
+                color.setValue(output, forKey: kCIInputImageKey)
+                color.setValue(1.08, forKey: "inputSaturation")
+                color.setValue(0.04, forKey: "inputBrightness")
+                if let r = color.outputImage { output = r }
+            }
+
+        default:
+            break  // "default" — no adjustment, original rendering
+        }
+
+        // Scale down if needed
+        let scale = min(1.0, CGFloat(maxWidth) / output.extent.width)
+        if scale < 1.0 {
+            output = output.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+        }
+
+        // Render to JPEG
+        let colorSpace = CGColorSpace(name: CGColorSpace.sRGB)!
+        return ciContext.jpegRepresentation(of: output, colorSpace: colorSpace,
+                                            options: [kCGImageDestinationLossyCompressionQuality as CIImageRepresentationOption: 0.85])
+    }
+
+    func addToPhotoLibrary(path: String) -> (Bool, String?) {
+        let fileURL = URL(fileURLWithPath: path)
+        guard FileManager.default.fileExists(atPath: path) else {
+            return (false, "File not found: \(path)")
+        }
+
+        let semaphore = DispatchSemaphore(value: 0)
+        var success = false
+        var errorMessage: String?
+
+        PHPhotoLibrary.shared().performChanges({
+            PHAssetChangeRequest.creationRequestForAssetFromImage(atFileURL: fileURL)
+        }) { ok, error in
+            success = ok
+            if let error = error {
+                errorMessage = error.localizedDescription
+            }
+            semaphore.signal()
+        }
+
+        semaphore.wait()
+        return (success, errorMessage)
+    }
+
+    func getFullImage(for localIdentifier: String) -> Data? {
+        // No local caching — PhotoKit downloads into Photos Library automatically.
+        // If already downloaded, PhotoKit serves from local Photos Library (fast).
+        // If not, it downloads from iCloud (slow, but only once — stays in Photos Library).
+
+        let fetchResult = PHAsset.fetchAssets(withLocalIdentifiers: [localIdentifier], options: nil)
+        guard let asset = fetchResult.firstObject else { return nil }
+
+        let options = PHImageRequestOptions()
+        options.isSynchronous = true
+        options.deliveryMode = .highQualityFormat
+        options.resizeMode = .exact
+        options.isNetworkAccessAllowed = true  // Download from iCloud if needed
+
+        var resultData: Data?
+        // Request up to 2000x2000 for viewing
+        let targetSize = CGSize(width: 2000, height: 2000)
+
+        PHImageManager.default().requestImage(
+            for: asset, targetSize: targetSize,
+            contentMode: .aspectFit, options: options
+        ) { image, _ in
+            if let image = image {
+                guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return }
+                let rep = NSBitmapImageRep(cgImage: cgImage)
+                resultData = rep.representation(using: .jpeg, properties: [.compressionFactor: 0.85])
             }
         }
 

@@ -9,9 +9,9 @@ from datetime import datetime
 from typing import Optional
 
 from config import DATA_DIR, ORGANIZE_PATTERN, RAW_EXTENSIONS
-from models import ImportRequest, ImportProgress, CameraFile, FileType
+from models import ImportRequest, ImportProgress
 from scanner import file_hash, extract_exif
-from converter import convert_to_dng, is_dng_available
+from converter import convert_to_dng
 
 
 # 全局导入进度
@@ -149,11 +149,19 @@ def import_files(request: ImportRequest) -> ImportProgress:
         _import_progress.completed = i
 
         try:
-            # 跳过重复
+            # 跳过重复 — 只有目标文件确实存在时才跳过
             if request.skip_duplicates:
                 fh = file_hash(filepath)
                 if fh in imported_hashes:
-                    continue
+                    # Verify the file actually exists at destination
+                    dest_check = _build_dest_path(
+                        filepath, request.destination_path,
+                        request.organize_by, request.event_name,
+                        request.raw_subfolder,
+                    )
+                    if dest_check.exists():
+                        continue
+                    # File hash recorded but destination missing — re-import
 
             # 构建目标路径
             dest_path = _build_dest_path(

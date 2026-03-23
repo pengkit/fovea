@@ -189,6 +189,11 @@ body {
 /* ====== MAIN ====== */
 .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
 
+/* Each page must fill .main and be a flex column so .content gets constrained height */
+#page-import, #page-library, #page-trash {
+  display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden;
+}
+
 .topbar {
   padding: 18px 28px;
   background: var(--bg2);
@@ -205,7 +210,7 @@ body {
   letter-spacing: -0.3px;
 }
 
-.content { flex: 1; overflow-y: auto; padding: 24px 28px; }
+.content { flex: 1; overflow-y: auto; padding: 24px 28px; min-height: 0; }
 .content::-webkit-scrollbar { width: 6px; }
 .content::-webkit-scrollbar-thumb { background: var(--text3); border-radius: 3px; }
 .content::-webkit-scrollbar-track { background: transparent; }
@@ -418,7 +423,7 @@ body {
 
 .file-card .thumb {
   width: 100%;
-  aspect-ratio: 4/3;
+  aspect-ratio: 1;
   background: var(--thumb-bg);
   overflow: hidden;
   position: relative;
@@ -426,7 +431,8 @@ body {
 
 .file-card .thumb img {
   width: 100%; height: 100%;
-  object-fit: cover;
+  object-fit: contain;
+  image-orientation: none;
   transition: transform 0.3s ease;
   -webkit-user-drag: none;
   pointer-events: none;
@@ -448,9 +454,8 @@ body {
   top: 8px; left: 8px;
   width: 20px; height: 20px;
   border-radius: 6px;
-  border: 2px solid rgba(255,255,255,0.5);
-  background: var(--checkbox-bg);
-  backdrop-filter: blur(4px);
+  border: 2px solid rgba(255,255,255,0.7);
+  background: rgba(0,0,0,0.15);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -459,6 +464,37 @@ body {
   font-weight: 700;
   z-index: 2;
   transition: all var(--transition);
+}
+
+/* Select checkbox for timeline photos */
+.select-cb {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 18px !important;
+  height: 18px !important;
+  border: 2px solid rgba(255,255,255,0.6);
+  border-radius: 4px;
+  background: rgba(0,0,0,0.3);
+  cursor: pointer;
+  position: absolute;
+  top: 6px; left: 6px;
+  z-index: 2;
+}
+.select-cb:checked {
+  background: var(--accent);
+  border-color: var(--accent);
+  box-shadow: 0 2px 6px rgba(99,102,241,0.4);
+}
+.select-cb:checked::after {
+  content: '✓';
+  color: white;
+  font-size: 12px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
 }
 
 .file-card.selected .checkbox {
@@ -772,17 +808,15 @@ body {
       <h1>Fovea</h1>
     </div>
     <div class="sidebar-nav">
-      <div class="nav-label">Library</div>
-      <div class="nav-item active" data-page="library" data-src="local" onclick="switchPage('library'); switchLibSource('local');">
+      <div class="nav-label">Photos</div>
+      <div class="nav-item active" data-page="library" data-src="local" onclick="switchLibSource('local')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
-        <span>Local</span>
+        <span>Fovea Library</span>
       </div>
-      <div class="nav-item" data-page="library" data-src="icloud" onclick="switchPage('library'); switchLibSource('icloud');">
+      <div class="nav-item" data-page="library" data-src="icloud" onclick="switchLibSource('icloud')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>
         <span>iCloud Photos</span>
       </div>
-      <div id="library-sources"></div>
-
       <div class="nav-label">Actions</div>
       <div class="nav-item" data-page="import" onclick="switchPage('import')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -795,13 +829,11 @@ body {
         <span class="badge" id="trash-count" style="display:none;">0</span>
       </div>
 
-      <!-- AI status indicator (not a page, just status) -->
+      <!-- AI status indicator — clickable to view results -->
       <div class="nav-label">AI</div>
-      <div style="padding:4px 12px;">
-        <div style="display:flex; align-items:center; gap:8px; font-size:11px; color:var(--text3);">
-          <div id="ai-dot" style="width:8px;height:8px;border-radius:50%;background:var(--text3);flex-shrink:0;"></div>
-          <span id="ai-status-text">Idle</span>
-        </div>
+      <div class="nav-item" onclick="showAnalysisResults()" style="padding:6px 12px;">
+        <div id="ai-dot" style="width:8px;height:8px;border-radius:50%;background:var(--text3);flex-shrink:0;"></div>
+        <span id="ai-status-text" style="font-size:11px;">Idle</span>
       </div>
     </div>
     <div class="sidebar-footer">
@@ -940,7 +972,18 @@ body {
     <div id="page-library">
       <div class="topbar">
         <h2 id="lib-title">Library</h2>
-        <span id="lib-status" style="font-size:11px; color:var(--text3);"></span>
+        <div style="display:flex; align-items:center; gap:10px;">
+          <span id="lib-status" style="font-size:11px; color:var(--text3);"></span>
+          <button id="select-all-btn" class="btn btn-ghost btn-sm" onclick="toggleSelectAll()" style="display:none;">Select All</button>
+          <button id="delete-selected-btn" class="btn btn-danger btn-sm" onclick="deleteSelected()" style="display:none;">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+            Delete
+          </button>
+          <button id="send-icloud-btn" class="btn btn-primary btn-sm" onclick="sendAllToIcloud()" style="display:none;">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/><polyline points="16 16 12 12 8 16"/></svg>
+            Send to iCloud
+          </button>
+        </div>
       </div>
       <div class="content">
         <div id="lib-error" style="display:none;" class="card"><div class="card-body"><div class="empty-state" id="lib-error-msg"></div></div></div>
@@ -990,8 +1033,26 @@ body {
         </div>
         <div style="padding:20px;">
           <div id="adjust-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:12px;"></div>
-          <div id="adjust-actions" style="margin-top:16px; text-align:center; display:none;">
+          <div id="adjust-toolbar" style="margin-top:14px; display:none; text-align:center;">
+            <div style="display:flex; justify-content:center; gap:8px; margin-bottom:12px;">
+              <button class="btn btn-secondary btn-sm" onclick="rotateAdjust(-90)" title="Rotate Left">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+                Rotate Left
+              </button>
+              <button class="btn btn-secondary btn-sm" onclick="rotateAdjust(90)" title="Rotate Right">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                Rotate Right
+              </button>
+            </div>
+            <div id="adjust-current-state" style="font-size:11px; color:var(--text3); margin-bottom:10px;"></div>
+          </div>
+          <div id="adjust-actions" style="margin-top:8px; text-align:center; display:none;">
             <button class="btn btn-primary" id="adjust-save-btn">Save Selected</button>
+            <button class="btn btn-ghost btn-sm" id="adjust-revert-btn" onclick="revertAdjustment()" style="margin-left:8px; display:none;">Revert to Original</button>
+            <button class="btn btn-secondary btn-sm" onclick="sendSingleToIcloud(currentAdjustPath)" style="margin-left:8px;">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/><polyline points="16 16 12 12 8 16"/></svg>
+              iCloud
+            </button>
             <button class="btn btn-secondary" onclick="closeAdjustModal()" style="margin-left:8px;">Cancel</button>
           </div>
         </div>
@@ -1054,10 +1115,8 @@ async function api(path, options = {}) {
 
 // === Navigation ===
 function switchPage(page) {
-  // For non-library pages, clear all active; for library, let switchLibSource handle sub-selection
   document.querySelectorAll('.nav-item[data-page]').forEach(el => {
     if (page === 'library') {
-      // Only highlight the one matching current source (local/icloud)
       if (el.dataset.page === 'library') {
         el.classList.toggle('active', el.dataset.src === currentLibSource);
       } else {
@@ -1069,9 +1128,9 @@ function switchPage(page) {
   });
   ['library', 'import', 'trash'].forEach(p => {
     const el = document.getElementById('page-' + p);
-    if (el) el.style.display = p === page ? '' : 'none';
+    if (el) el.style.display = p === page ? 'flex' : 'none';
   });
-  if (page === 'library') loadLibrary();
+  // Library loading is handled by switchLibSource — don't load here
   if (page === 'trash') loadTrash();
   if (page === 'import') refreshVolumes();
 }
@@ -1265,7 +1324,8 @@ async function startImport() {
     await api('/api/import', { method: 'POST', body: JSON.stringify(buildImportReq()) });
     toast('Import started', 'info');
 
-    importInterval = setInterval(async () => {
+    // Use recursive setTimeout (not setInterval) to prevent race conditions
+    async function pollProgress() {
       try {
         const p = await api('/api/import/progress');
         const pct = p.total > 0 ? Math.round(p.completed / p.total * 100) : 0;
@@ -1273,13 +1333,15 @@ async function startImport() {
         document.getElementById('import-progress-text').textContent = `${p.completed}/${p.total} ${p.current_file ? '\u2014 ' + p.current_file : ''} (${pct}%)`;
 
         if (p.status === 'completed' || p.status === 'completed_with_errors') {
-          clearInterval(importInterval);
           document.getElementById('import-btn').disabled = false;
           document.getElementById('import-progress-fill').style.width = '100%';
           toast(p.errors.length ? `Done with ${p.errors.length} errors` : `Imported ${p.completed} files!`, p.errors.length ? 'error' : 'success');
+          return;  // Stop polling
         }
-      } catch (e) { /* ignore polling errors */ }
-    }, 500);
+      } catch (e) { /* ignore */ }
+      setTimeout(pollProgress, 500);  // Poll again after current one finishes
+    }
+    pollProgress();
   } catch (e) { toast('Import failed', 'error'); document.getElementById('import-btn').disabled = false; }
 }
 
@@ -1308,13 +1370,17 @@ async function checkDngStatus() {
 
 // === Library (unified) ===
 let currentLibSource = 'local';
+let icloudOffset = 0;
+let icloudLoading = false;
+let icloudHasMore = true;
+let localOffset = 0;
+let localLoading = false;
+let localHasMore = true;
 
 function switchLibSource(src) {
   currentLibSource = src;
-  // Highlight correct sidebar item
-  document.querySelectorAll('.nav-item[data-src]').forEach(el => {
-    el.classList.toggle('active', el.dataset.src === src);
-  });
+  // Show library page + highlight correct nav item
+  switchPage('library');
   loadLibrary();
 }
 
@@ -1323,15 +1389,19 @@ async function loadLibrary() {
   const albumsEl = document.getElementById('lib-albums');
 
   if (currentLibSource === 'local') {
-    document.getElementById('lib-title').textContent = 'Local Library';
+    document.getElementById('lib-title').textContent = 'Fovea Library';
+    document.getElementById('lib-status').textContent = '';
     albumsEl.style.display = 'none';
     document.getElementById('lib-error').style.display = 'none';
-    loadLocalLibrary();
+    localOffset = 0;
+    localHasMore = true;
+    loadLocalTimeline(true);
     return;
   }
 
   // iCloud Photos
   document.getElementById('lib-title').textContent = 'iCloud Photos';
+  document.getElementById('send-icloud-btn').style.display = 'none';
   let status;
   try {
     const controller = new AbortController();
@@ -1363,25 +1433,38 @@ async function loadLibrary() {
     }</div>`;
   }
 
-  loadLibPhotos();
+  icloudOffset = 0;
+  icloudHasMore = true;
+  loadLibPhotos(undefined, true);
 }
 
-async function loadLibPhotos(album) {
-  const data = await api(`/api/library/photos?limit=80${album ? '&album=' + encodeURIComponent(album) : ''}`);
+async function loadLibPhotos(album, reset) {
+  if (icloudLoading) return;
+  if (!reset && !icloudHasMore) return;
+  icloudLoading = true;
+  if (reset) { icloudOffset = 0; icloudHasMore = true; }
+
+  let data;
+  try {
+    data = await api(`/api/library/photos?limit=60&offset=${icloudOffset}${album ? '&album=' + encodeURIComponent(album) : ''}`);
+  } catch (e) { icloudLoading = false; return; }
+
   document.getElementById('lib-photo-count').textContent = `${data.total} photos${album ? ' in ' + album : ''}`;
 
   const grid = document.getElementById('lib-photo-grid');
-  grid.innerHTML = '';
+  if (reset) grid.innerHTML = '';
 
-  (data.photos || []).forEach(p => {
+  (data.photos || []).forEach((p, i) => {
+    const idx = icloudOffset + i;
     const card = document.createElement('div');
     card.className = 'file-card';
     card.setAttribute('draggable', 'false');
-    card.onclick = () => openPhotoPreview(p.thumb_url, p.filename, p);
+    card.onclick = () => openPhotoPreview(p.thumb_url, p.filename, p, idx);
     const thumbSrc = p.thumb_url || '';
+    const thumbId = `icloud-thumb-${idx}`;
     card.innerHTML = `
       <div class="thumb" draggable="false">
-        ${thumbSrc ? `<img src="${thumbSrc}" loading="lazy" draggable="false">` : '<div class="placeholder">' + (p.filename || '').split('.').pop() + '</div>'}
+        ${thumbSrc ? `<img id="${thumbId}" src="${thumbSrc}" loading="lazy" draggable="false">` : '<div class="placeholder">' + (p.filename || '').split('.').pop() + '</div>'}
       </div>
       <div class="info">
         <div class="name" title="${p.filename || ''}">${p.filename || 'Unknown'}</div>
@@ -1389,45 +1472,235 @@ async function loadLibPhotos(album) {
       </div>`;
     grid.appendChild(card);
   });
+
+  icloudOffset += (data.photos || []).length;
+  icloudHasMore = icloudOffset < data.total;
+  icloudLoading = false;
+
+  // Start/refresh progressive full-res loading
+  setTimeout(() => startProgressiveLoading(), 300);
 }
 
 // === Photo Preview (for iCloud photos) ===
-function openPhotoPreview(thumbUrl, filename, photoData) {
+function openPhotoPreview(thumbUrl, filename, photoData, gridIndex) {
   if (!thumbUrl) { toast('Photo not available', 'error'); return; }
 
-  // Use the adjustment modal as a preview viewer
+  const fullUrl = thumbUrl.replace('/thumb?', '/full?');
+
   document.getElementById('adjust-modal').style.display = '';
   const grid = document.getElementById('adjust-grid');
   grid.style.gridTemplateColumns = '1fr';
 
+  // Build detailed metadata
+  const dateFmt = photoData.date ? new Date(photoData.date).toLocaleString() : '';
+  const dims = photoData.width && photoData.height ? `${photoData.width} x ${photoData.height}` : '';
+  const tags = [
+    photoData.is_favorite ? 'Favorite' : '',
+    photoData.is_screenshot ? 'Screenshot' : '',
+    photoData.is_live ? 'Live Photo' : '',
+    photoData.is_burst ? 'Burst' : '',
+  ].filter(Boolean).join(' · ');
+  const hasLocation = photoData.latitude && photoData.longitude;
+
   grid.innerHTML = `
-    <div style="text-align:center;">
-      <img src="${thumbUrl}" style="max-width:100%; max-height:60vh; border-radius:var(--radius-sm); pointer-events:none;">
-      <div style="margin-top:14px; font-size:14px; font-weight:600;">${filename}</div>
-      <div style="font-size:12px; color:var(--text3); margin-top:4px;">
-        ${photoData.width || ''}${photoData.width ? ' x ' : ''}${photoData.height || ''}
-        ${photoData.date ? ' &middot; ' + new Date(photoData.date).toLocaleDateString() : ''}
-        ${photoData.is_favorite ? ' &middot; Favorite' : ''}
-        ${photoData.is_screenshot ? ' &middot; Screenshot' : ''}
-        ${photoData.is_live ? ' &middot; Live Photo' : ''}
+    <div style="text-align:center; position:relative;">
+      <img id="preview-img" src="${thumbUrl}" style="max-width:100%; max-height:55vh; border-radius:var(--radius-sm);">
+      <div id="preview-loading" style="margin-top:10px; font-size:12px; color:var(--text3);">
+        <div style="display:inline-flex; align-items:center; gap:8px;">
+          <div style="width:14px;height:14px;border:2px solid var(--text3);border-top-color:var(--accent);border-radius:50%;animation:spin 0.8s linear infinite;"></div>
+          Loading full resolution...
+        </div>
+      </div>
+      <div style="margin-top:12px; font-size:15px; font-weight:600;">${filename}</div>
+      <div style="font-size:12px; color:var(--text3); margin-top:6px; line-height:1.6;">
+        ${dateFmt ? `<div>${dateFmt}</div>` : ''}
+        ${dims ? `<div>${dims}</div>` : ''}
+        ${tags ? `<div>${tags}</div>` : ''}
+        ${hasLocation ? `<div id="preview-location">Loading location...</div>` : ''}
+      </div>
+      <div style="margin-top:14px; display:flex; justify-content:center; gap:8px; flex-wrap:wrap;">
+        <button class="btn btn-secondary btn-sm" onclick="downloadPreviewPhoto()">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Save Full Image
+        </button>
+        <button class="btn btn-danger btn-sm" onclick="deletePreviewPhoto()">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+          Delete
+        </button>
       </div>
     </div>
   `;
   document.getElementById('adjust-actions').style.display = 'none';
+
+  // Store preview state for actions
+  window._previewState = { thumbUrl, fullUrl, filename, photoData, gridIndex };
+
+  // Reverse geocode location
+  if (hasLocation) {
+    reverseGeocode(photoData.latitude, photoData.longitude).then(loc => {
+      const el = document.getElementById('preview-location');
+      if (el) el.textContent = loc || `${photoData.latitude.toFixed(4)}, ${photoData.longitude.toFixed(4)}`;
+    });
+  }
+
+  // Load full-res image in background
+  const fullImg = new Image();
+  fullImg.onload = () => {
+    const el = document.getElementById('preview-img');
+    if (el) el.src = fullUrl;
+    const ld = document.getElementById('preview-loading');
+    if (ld) ld.innerHTML = '<span style="color:var(--success);">Full resolution loaded</span>';
+    setTimeout(() => { if (ld) ld.style.display = 'none'; }, 2000);
+
+    // Replace thumbnail in the grid with the full-res URL
+    if (gridIndex !== undefined) {
+      const gridImg = document.getElementById(`icloud-thumb-${gridIndex}`);
+      if (gridImg) gridImg.src = fullUrl;
+    }
+  };
+  fullImg.onerror = () => {
+    const ld = document.getElementById('preview-loading');
+    if (ld) ld.innerHTML = '<span style="color:var(--text3);">Full version not available</span>';
+  };
+  fullImg.src = fullUrl;
+}
+
+// --- Preview actions ---
+function downloadPreviewPhoto() {
+  const state = window._previewState;
+  if (!state) return;
+  // Open full-res URL in new tab for download
+  const a = document.createElement('a');
+  a.href = state.fullUrl;
+  a.download = state.filename || 'photo.jpg';
+  a.click();
+  toast('Downloading full resolution...', 'info');
+}
+
+async function deletePreviewPhoto() {
+  const state = window._previewState;
+  if (!state) return;
+  if (!confirm(`Move "${state.filename}" to Recently Deleted?`)) return;
+
+  // For local photos, use server-side trash
+  if (state.photoData?.path || state.fullUrl?.includes('/api/thumb')) {
+    const filePath = state.photoData?.path || '';
+    if (filePath) {
+      try {
+        await api(`/api/trash/delete?path=${encodeURIComponent(filePath)}`, { method: 'POST' });
+        toast('Moved to Recently Deleted', 'info');
+      } catch (e) { toast('Delete failed', 'error'); return; }
+    }
+  }
+
+  closeAdjustModal();
+  updateTrashBadge();
+
+  // Remove from grid
+  if (state.gridIndex !== undefined) {
+    const card = document.getElementById(`icloud-thumb-${state.gridIndex}`)?.closest('.file-card');
+    if (card) card.remove();
+  }
+  // Refresh local library if we're on it
+  if (currentLibSource === 'local') loadLocalTimeline(true);
+}
+
+async function sendAllToIcloud() {
+  const checked = document.querySelectorAll('.select-cb:checked');
+  if (checked.length === 0) {
+    toast('Select photos first (use checkboxes)', 'info');
+    return;
+  }
+  if (!confirm(`Send ${checked.length} selected photos to iCloud Photos?`)) return;
+  toast(`Sending ${checked.length} photos to iCloud...`, 'info');
+  let ok = 0, fail = 0;
+  for (const cb of checked) {
+    try {
+      const r = await fetch(`http://127.0.0.1:9998/addtolib?path=${encodeURIComponent(cb.dataset.path)}`);
+      const j = await r.json();
+      if (j.ok) { ok++; cb.checked = false; } else fail++;
+    } catch (e) { fail++; }
+  }
+  toast(`Added ${ok} photos to iCloud${fail ? `, ${fail} failed` : ''}`, fail ? 'error' : 'success');
+}
+
+function toggleSelectAll() {
+  const cbs = document.querySelectorAll('.select-cb');
+  const allChecked = [...cbs].every(c => c.checked);
+  cbs.forEach(c => c.checked = !allChecked);
+  updateSelectionCount();
+}
+
+function updateSelectionCount() {
+  const n = document.querySelectorAll('.select-cb:checked').length;
+  const icloudBtn = document.getElementById('send-icloud-btn');
+  const delBtn = document.getElementById('delete-selected-btn');
+  if (icloudBtn) icloudBtn.innerHTML = n > 0
+    ? `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/><polyline points="16 16 12 12 8 16"/></svg> Send ${n} to iCloud`
+    : `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/><polyline points="16 16 12 12 8 16"/></svg> Send to iCloud`;
+  if (delBtn) delBtn.style.display = n > 0 ? '' : 'none';
+}
+
+async function deleteSelected() {
+  const checked = document.querySelectorAll('.select-cb:checked');
+  if (checked.length === 0) return;
+  if (!confirm(`Move ${checked.length} photos to Recently Deleted?`)) return;
+
+  let deleted = 0;
+  for (const cb of checked) {
+    try {
+      await api(`/api/trash/delete?path=${encodeURIComponent(cb.dataset.path)}`, { method: 'POST' });
+      const card = cb.closest('.file-card');
+      if (card) card.remove();
+      deleted++;
+    } catch (e) {}
+  }
+  toast(`Moved ${deleted} photos to Recently Deleted`, 'info');
+  updateSelectionCount();
+  updateTrashBadge();
+}
+
+async function sendSingleToIcloud(filepath) {
+  toast('Adding to iCloud...', 'info');
+  try {
+    const r = await fetch(`http://127.0.0.1:9998/addtolib?path=${encodeURIComponent(filepath)}`);
+    const j = await r.json();
+    if (j.ok) toast('Added to iCloud Photos', 'success');
+    else toast(j.error || 'Failed', 'error');
+  } catch (e) { toast('Failed to send to iCloud', 'error'); }
+}
+
+async function reverseGeocode(lat, lon) {
+  try {
+    const resp = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&zoom=14&accept-language=zh`, { headers: { 'User-Agent': 'Fovea/1.0' } });
+    const data = await resp.json();
+    return data.display_name?.split(',').slice(0, 3).join(', ') || null;
+  } catch (e) {
+    return null;
+  }
 }
 
 // === Adjustment Modal ===
 let currentAdjustPath = null;
 let selectedAdjustUrl = null;
+let adjustRotation = 0;  // degrees: 0, 90, 180, 270
+
+// Persistent adjustment metadata: { filepath: { adjustment: "name", rotation: 0 } }
+const adjustMeta = JSON.parse(localStorage.getItem('fovea-adjust-meta') || '{}');
+
+function saveAdjustMeta() { localStorage.setItem('fovea-adjust-meta', JSON.stringify(adjustMeta)); }
 
 async function openAdjustModal(filepath, filename) {
   if (!filepath) { toast('Photo not available locally', 'error'); return; }
   currentAdjustPath = filepath;
+  adjustRotation = adjustMeta[filepath]?.rotation || 0;
+
   document.getElementById('adjust-modal').style.display = '';
   const grid = document.getElementById('adjust-grid');
   grid.style.gridTemplateColumns = '1fr 1fr';
   grid.innerHTML = '<div style="text-align:center; grid-column:1/-1; padding:40px;"><div class="spinner"></div><p style="margin-top:12px; color:var(--text3);">Generating adjustments...</p></div>';
   document.getElementById('adjust-actions').style.display = 'none';
+  document.getElementById('adjust-toolbar').style.display = 'none';
 
   let data;
   try { data = await api(`/api/adjust?path=${encodeURIComponent(filepath)}`); } catch (e) { toast('Failed to load adjustments', 'error'); closeAdjustModal(); return; }
@@ -1438,93 +1711,208 @@ async function openAdjustModal(filepath, filename) {
     ...(data.adjustments || []),
   ];
 
-  grid.innerHTML = items.map((item, i) => `
-    <div class="adjust-option${i === 0 ? ' selected' : ''}" data-url="${item.url}" onclick="selectAdjustment(this, '${item.url}')" style="cursor:pointer; border:2px solid ${i === 0 ? 'var(--accent)' : 'var(--border)'}; border-radius:var(--radius-sm); overflow:hidden; transition:all var(--transition);">
-      <img src="${item.url}" style="width:100%; aspect-ratio:4/3; object-fit:cover;">
+  // Check if there's a previously applied adjustment
+  const prevAdj = adjustMeta[filepath]?.adjustment || null;
+  const isSideways = (adjustRotation === 90 || adjustRotation === 270);
+  const rotStyle = adjustRotation ? `transform:rotate(${adjustRotation}deg)${isSideways ? ' scale(0.75)' : ''};` : '';
+
+  grid.innerHTML = items.map((item, i) => {
+    const isPrev = prevAdj && (item.name_zh === prevAdj || item.name === prevAdj);
+    const isSelected = prevAdj ? isPrev : (i === 0);
+    return `
+    <div class="adjust-option${isSelected ? ' selected' : ''}" data-url="${item.url}" data-name="${item.name_zh || item.name}" onclick="selectAdjustment(this, '${item.url}')" style="cursor:pointer; border:2px solid ${isSelected ? 'var(--accent)' : 'var(--border)'}; border-radius:var(--radius-sm); overflow:hidden; transition:all var(--transition); position:relative;">
+      <img src="${item.url}" style="width:100%; aspect-ratio:4/3; object-fit:contain; background:var(--thumb-bg); ${rotStyle}">
       <div style="padding:10px;">
-        <div style="font-weight:600; font-size:12px;">${item.name_zh || item.name}</div>
+        <div style="font-weight:600; font-size:12px;">${item.name_zh || item.name}${isPrev ? ' <span style="color:var(--success);">✓ Current</span>' : ''}</div>
         <div style="font-size:10px; color:var(--text3);">${item.description || item.desc || ''}</div>
       </div>
-    </div>
-  `).join('');
+    </div>`;
+  }).join('');
 
-  selectedAdjustUrl = data.original;
+  selectedAdjustUrl = prevAdj ? items.find(i => (i.name_zh === prevAdj || i.name === prevAdj))?.url || data.original : data.original;
   document.getElementById('adjust-actions').style.display = '';
+  document.getElementById('adjust-toolbar').style.display = '';
   document.getElementById('adjust-save-btn').onclick = () => saveAdjustment();
+
+  // Show AI analysis tags if available (non-blocking)
+  fetchPhotoTags(filepath);
+
+  // Show revert button if adjustment was previously applied
+  const revertBtn = document.getElementById('adjust-revert-btn');
+  revertBtn.style.display = prevAdj ? '' : 'none';
+
+  // Show current state
+  const stateEl = document.getElementById('adjust-current-state');
+  if (prevAdj || adjustRotation) {
+    const parts = [];
+    if (prevAdj) parts.push(`Style: ${prevAdj}`);
+    if (adjustRotation) parts.push(`Rotated: ${adjustRotation}°`);
+    stateEl.textContent = parts.join(' · ');
+  } else {
+    stateEl.textContent = '';
+  }
 }
 
 function selectAdjustment(el, url) {
-  document.querySelectorAll('.adjust-option').forEach(o => o.style.borderColor = 'var(--border)');
+  document.querySelectorAll('.adjust-option').forEach(o => { o.style.borderColor = 'var(--border)'; o.classList.remove('selected'); });
   el.style.borderColor = 'var(--accent)';
+  el.classList.add('selected');
   selectedAdjustUrl = url;
+}
+
+function rotateAdjust(deg) {
+  adjustRotation = (adjustRotation + deg + 360) % 360;
+  // Rotate all preview images — scale down on 90/270 to fit in container
+  const isSideways = (adjustRotation === 90 || adjustRotation === 270);
+  document.querySelectorAll('.adjust-option img').forEach(img => {
+    if (adjustRotation === 0) {
+      img.style.transform = '';
+    } else if (isSideways) {
+      img.style.transform = `rotate(${adjustRotation}deg) scale(0.75)`;
+    } else {
+      img.style.transform = `rotate(${adjustRotation}deg)`;
+    }
+  });
+  // Update state display
+  const stateEl = document.getElementById('adjust-current-state');
+  const prevAdj = adjustMeta[currentAdjustPath]?.adjustment;
+  const parts = [];
+  if (prevAdj) parts.push(`Style: ${prevAdj}`);
+  if (adjustRotation) parts.push(`Rotated: ${adjustRotation}°`);
+  stateEl.textContent = parts.join(' · ');
 }
 
 async function saveAdjustment() {
   if (!currentAdjustPath || !selectedAdjustUrl) return;
-  if (selectedAdjustUrl.includes('_original')) { closeAdjustModal(); toast('Kept original', 'info'); return; }
-  const data = await api(`/api/adjust/save?filepath=${encodeURIComponent(currentAdjustPath)}&adjustment_url=${encodeURIComponent(selectedAdjustUrl)}&mode=both`, { method: 'POST' });
-  if (data.saved) { toast(`Saved: ${data.saved.split('/').pop()}`, 'success'); }
+
+  const selectedName = document.querySelector('.adjust-option.selected')?.dataset.name || 'Original';
+  const isOriginal = selectedAdjustUrl.includes('_original') || selectedName === 'Original';
+
+  if (isOriginal && !adjustRotation) {
+    closeAdjustModal();
+    toast('Kept original', 'info');
+    return;
+  }
+
+  try {
+    const data = await api(`/api/adjust/save?filepath=${encodeURIComponent(currentAdjustPath)}&adjustment_url=${encodeURIComponent(selectedAdjustUrl)}&mode=replace&rotation=${adjustRotation}`, { method: 'POST' });
+    if (data.saved) { toast(`Saved: ${data.saved.split('/').pop()}`, 'success'); }
+  } catch (e) { toast('Save failed', 'error'); return; }
+
+  // Persist metadata
+  adjustMeta[currentAdjustPath] = { adjustment: selectedName, rotation: adjustRotation };
+  saveAdjustMeta();
+
+  // Remember the directory of the saved file so we can refresh
+  const savedDir = currentAdjustPath.substring(0, currentAdjustPath.lastIndexOf('/'));
+
   closeAdjustModal();
+
+  // Refresh the local library view to show updated thumbnails
+  const rootPath = window._defaultDestination || destinations[0]?.path || '';
+  if (savedDir === rootPath) {
+    loadLocalLibrary();
+  } else {
+    browseLocalDir(savedDir);
+  }
+}
+
+async function revertAdjustment() {
+  if (!currentAdjustPath) return;
+  if (!confirm('Revert to original? This will undo the applied adjustment.')) return;
+
+  try {
+    await api(`/api/adjust/revert?filepath=${encodeURIComponent(currentAdjustPath)}`, { method: 'POST' });
+    const revertDir = currentAdjustPath.substring(0, currentAdjustPath.lastIndexOf('/'));
+    delete adjustMeta[currentAdjustPath];
+    saveAdjustMeta();
+    toast('Reverted to original', 'success');
+    closeAdjustModal();
+    // Refresh view
+    const rootPath2 = window._defaultDestination || destinations[0]?.path || '';
+    if (revertDir === rootPath2) loadLocalLibrary(); else browseLocalDir(revertDir);
+  } catch (e) { toast('Revert failed', 'error'); }
 }
 
 function closeAdjustModal() {
   document.getElementById('adjust-modal').style.display = 'none';
   currentAdjustPath = null;
+  adjustRotation = 0;
 }
 
-// === Local Library ===
-async function loadLocalLibrary() {
+// === Local Library (Timeline View) ===
+async function loadLocalTimeline(reset) {
+  if (localLoading) return;
+  if (!reset && !localHasMore) return;
+  localLoading = true;
+  if (reset) { localOffset = 0; localHasMore = true; }
+
   const grid = document.getElementById('lib-photo-grid');
-  // Load destinations if not yet available
-  if (!destinations.length) {
-    try {
-      const ddata = await api('/api/destinations');
-      destinations = ddata.destinations || [];
-    } catch (e) {}
-  }
-  if (!destinations.length) {
-    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1;"><h3>No library path configured</h3><p>Import photos from a camera to create your local library.</p></div>`;
-    document.getElementById('lib-photo-count').textContent = '';
-    return;
-  }
+
   let data;
   try {
-    data = await api('/api/browse?path=' + encodeURIComponent(destinations[0]?.path || ''));
+    data = await api(`/api/timeline?offset=${localOffset}&limit=60`);
   } catch (e) {
-    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1;"><h3>No photos yet</h3><p>Import photos from a camera to get started.</p></div>`;
-    document.getElementById('lib-photo-count').textContent = '';
-    return;
-  }
-  const imageExts = ['jpg','jpeg','png','heic','dng','arw','cr2','cr3','nef','raf','tif','tiff'];
-
-  if (!data.items?.length) {
-    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1;"><h3>No photos yet</h3><p>Import photos from a camera to get started.</p></div>`;
-    document.getElementById('lib-photo-count').textContent = '0 photos';
+    if (reset) {
+      grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1;"><h3>No photos yet</h3><p>Import photos from a camera to get started.</p></div>`;
+      document.getElementById('lib-photo-count').textContent = '';
+    }
+    localLoading = false;
     return;
   }
 
-  // Show folders and images
-  let items = data.items.filter(i => i.is_dir || imageExts.includes((i.name.split('.').pop() || '').toLowerCase()));
-  document.getElementById('lib-photo-count').textContent = items.length + ' items';
+  const countEl = document.getElementById('lib-photo-count');
+  countEl.innerHTML = `${data.total} photos in Fovea Library`;
+  document.getElementById('send-icloud-btn').style.display = data.total > 0 ? '' : 'none';
+  document.getElementById('select-all-btn').style.display = data.total > 0 ? '' : 'none';
 
-  grid.innerHTML = '';
-  items.forEach(item => {
+  if (reset) grid.innerHTML = '';
+
+  if (!data.photos?.length && reset) {
+    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1;"><h3>No photos yet</h3><p>Import photos from a camera to get started.</p></div>`;
+    localLoading = false;
+    return;
+  }
+
+  // Group by date
+  let lastDate = '';
+  (data.photos || []).forEach(p => {
+    const dateStr = p.date ? new Date(p.date).toLocaleDateString('zh-CN', {year:'numeric', month:'long', day:'numeric'}) : 'Unknown';
+    if (dateStr !== lastDate) {
+      lastDate = dateStr;
+      const header = document.createElement('div');
+      header.style.cssText = 'grid-column:1/-1; padding:12px 0 4px; font-size:13px; font-weight:600; color:var(--text2); border-bottom:1px solid var(--border); margin-bottom:4px;';
+      header.textContent = dateStr;
+      // Check if this header already exists (from previous page)
+      const existing = grid.querySelector(`[data-date-header="${dateStr}"]`);
+      if (!existing) {
+        header.setAttribute('data-date-header', dateStr);
+        grid.appendChild(header);
+      }
+    }
+
     const card = document.createElement('div');
     card.className = 'file-card';
     card.setAttribute('draggable', 'false');
-    if (item.is_dir) {
-      card.onclick = () => browseLocalDir(item.path);
-      card.innerHTML = `<div class="thumb"><div class="placeholder" style="font-size:32px;">&#128193;</div></div><div class="info"><div class="name">${item.name}</div><div class="detail">Folder</div></div>`;
-    } else {
-      card.onclick = () => openAdjustModal(item.path, item.name);
-      const thumbHtml = item.thumb_url
-        ? `<img src="${item.thumb_url}" loading="lazy" draggable="false" style="width:100%;height:100%;object-fit:cover;">`
-        : `<div class="placeholder">${item.name.split('.').pop()}</div>`;
-      card.innerHTML = `<div class="thumb" draggable="false">${thumbHtml}</div><div class="info"><div class="name">${item.name}</div><div class="detail">${formatSize(item.size)}</div></div>`;
-    }
+    card.setAttribute('data-path', p.path);
+    card.onclick = (e) => {
+      if (e.target.classList.contains('select-cb')) return;
+      openAdjustModal(p.path, p.name);
+    };
+    const thumbHtml = p.thumb_url
+      ? `<img src="${p.thumb_url}" loading="lazy">`
+      : `<div class="placeholder">${p.name.split('.').pop()}</div>`;
+    card.innerHTML = `<div class="thumb">${thumbHtml}<input type="checkbox" class="select-cb" data-path="${p.path}" onchange="updateSelectionCount()"></div><div class="info"><div class="name">${p.name}</div><div class="detail">${p.folder !== '.' ? p.folder + ' · ' : ''}${formatSize(p.size)}</div></div>`;
     grid.appendChild(card);
   });
+
+  localOffset += (data.photos || []).length;
+  localHasMore = data.has_more;
+  localLoading = false;
 }
+
+// Keep browseLocalDir for backward compat but it's no longer the default view
+function loadLocalLibrary() { loadLocalTimeline(true); }
 
 async function browseLocalDir(path) {
   let data;
@@ -1533,15 +1921,27 @@ async function browseLocalDir(path) {
   const imageExts = ['jpg','jpeg','png','heic','dng','arw','cr2','cr3','nef','raf','tif','tiff'];
   let items = (data.items || []).filter(i => i.is_dir || imageExts.includes((i.name.split('.').pop() || '').toLowerCase()));
 
-  document.getElementById('lib-photo-count').textContent = items.length + ' items in ' + path.split('/').pop();
-  grid.innerHTML = '';
+  const folderName = path.split('/').pop();
+  const parentPath = path.substring(0, path.lastIndexOf('/'));
+  const rootPath = window._defaultDestination || destinations[0]?.path || '';
+  const isRoot = path === rootPath;
 
-  // Back button
-  const back = document.createElement('div');
-  back.className = 'file-card';
-  back.onclick = () => loadLocalLibrary();
-  back.innerHTML = `<div class="thumb"><div class="placeholder" style="font-size:28px;">&larr;</div></div><div class="info"><div class="name">Back</div></div>`;
-  grid.appendChild(back);
+  // Top bar: count + navigation buttons
+  const countEl = document.getElementById('lib-photo-count');
+  countEl.innerHTML = `${items.length} items in <strong>${folderName}</strong>`;
+  if (!isRoot) {
+    const backBtn = `<button class="btn btn-ghost btn-sm" onclick="${parentPath === rootPath || !parentPath ? 'loadLocalLibrary()' : `browseLocalDir('${parentPath.replace(/'/g, "\\'")}')`}" style="margin-left:12px;">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5"/><polyline points="12 19 5 12 12 5"/></svg> Back
+    </button>`;
+    const homeBtn = parentPath !== rootPath
+      ? `<button class="btn btn-ghost btn-sm" onclick="loadLocalLibrary()" style="margin-left:4px;">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg> Home
+        </button>`
+      : '';
+    countEl.innerHTML += backBtn + homeBtn;
+  }
+
+  grid.innerHTML = '';
 
   items.forEach(item => {
     const card = document.createElement('div');
@@ -1553,7 +1953,7 @@ async function browseLocalDir(path) {
     } else {
       card.onclick = () => openAdjustModal(item.path, item.name);
       const thumbHtml = item.thumb_url
-        ? `<img src="${item.thumb_url}" loading="lazy" draggable="false" style="width:100%;height:100%;object-fit:cover;">`
+        ? `<img src="${item.thumb_url}" loading="lazy">`
         : `<div class="placeholder">${item.name.split('.').pop()}</div>`;
       card.innerHTML = `<div class="thumb" draggable="false">${thumbHtml}</div><div class="info"><div class="name">${item.name}</div><div class="detail">${formatSize(item.size)}</div></div>`;
     }
@@ -1561,22 +1961,13 @@ async function browseLocalDir(path) {
   });
 }
 
-// === Trash ===
-let trashItems = JSON.parse(localStorage.getItem('fovea-trash') || '[]');
+// === Trash (server-side soft delete) ===
+let trashItems = [];
 
-function moveToTrash(filepath, filename) {
-  trashItems.push({ path: filepath, filename: filename, deleted_at: new Date().toISOString() });
-  localStorage.setItem('fovea-trash', JSON.stringify(trashItems));
-  updateTrashBadge();
-  toast('Moved to Trash: ' + filename, 'info');
-}
-
-function loadTrash() {
-  // Clean items older than 30 days
-  const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
-  trashItems = trashItems.filter(t => new Date(t.deleted_at).getTime() > cutoff);
-  localStorage.setItem('fovea-trash', JSON.stringify(trashItems));
-  updateTrashBadge();
+async function loadTrash() {
+  let data;
+  try { data = await api('/api/trash/list'); } catch (e) { return; }
+  trashItems = data.items || [];
 
   const list = document.getElementById('trash-list');
   const empty = document.getElementById('trash-empty');
@@ -1585,6 +1976,7 @@ function loadTrash() {
     empty.style.display = '';
     list.innerHTML = '';
     document.getElementById('empty-trash-btn').style.display = 'none';
+    updateTrashBadge();
     return;
   }
 
@@ -1594,39 +1986,68 @@ function loadTrash() {
   list.innerHTML = trashItems.map((t, i) => `
     <div class="card" style="margin-bottom:8px;">
       <div class="card-body" style="display:flex; align-items:center; gap:14px;">
+        ${t.thumb_url ? `<img src="${t.thumb_url}" style="width:48px;height:48px;border-radius:6px;object-fit:cover;">` : ''}
         <div style="flex:1; min-width:0;">
           <div style="font-weight:500; font-size:13px;">${t.filename}</div>
-          <div style="font-size:11px; color:var(--text3);">Deleted ${new Date(t.deleted_at).toLocaleDateString()} &middot; Auto-removes in ${Math.ceil((new Date(t.deleted_at).getTime() + 30*86400000 - Date.now()) / 86400000)}d</div>
+          <div style="font-size:11px; color:var(--text3);">
+            Deleted ${new Date(t.deleted_at).toLocaleDateString()}
+            &middot; Auto-removes in ${Math.ceil(t.remaining_days)}d
+          </div>
+          <div style="font-size:10px; color:var(--text3); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${t.original_path}</div>
         </div>
-        <button class="btn btn-secondary btn-sm" onclick="restoreFromTrash(${i})">Restore</button>
+        <button class="btn btn-secondary btn-sm" onclick="restoreFromTrash('${t.trash_filename}', '${t.filename}')">Restore</button>
       </div>
     </div>
   `).join('');
-}
 
-function restoreFromTrash(index) {
-  const item = trashItems.splice(index, 1)[0];
-  localStorage.setItem('fovea-trash', JSON.stringify(trashItems));
   updateTrashBadge();
-  loadTrash();
-  toast('Restored: ' + item.filename, 'success');
 }
 
-function emptyTrash() {
-  if (!confirm('Permanently delete ' + trashItems.length + ' items?')) return;
-  trashItems = [];
-  localStorage.setItem('fovea-trash', '[]');
-  updateTrashBadge();
+async function restoreFromTrash(trashFilename, filename) {
+  try {
+    // Try skip first to detect conflict
+    const data = await api(`/api/trash/restore?trash_filename=${encodeURIComponent(trashFilename)}&mode=skip`, { method: 'POST' });
+    if (data.skipped) {
+      // Conflict — ask user
+      const choice = confirm(`"${filename}" already exists at original location.\n\nOK = Overwrite existing file\nCancel = Skip (keep both)`);
+      if (choice) {
+        await api(`/api/trash/restore?trash_filename=${encodeURIComponent(trashFilename)}&mode=overwrite`, { method: 'POST' });
+        toast(`Restored (overwritten): ${filename}`, 'success');
+      } else {
+        toast(`Skipped: ${filename}`, 'info');
+        return;
+      }
+    } else {
+      toast(`Restored: ${filename}`, 'success');
+    }
+  } catch (e) {
+    toast('Restore failed: ' + e.message, 'error');
+    return;
+  }
   loadTrash();
-  toast('Trash emptied', 'info');
 }
 
-function updateTrashBadge() {
+async function emptyTrash() {
+  if (!confirm('Permanently delete ' + trashItems.length + ' items? This cannot be undone.')) return;
+  try {
+    await api('/api/trash/empty', { method: 'POST' });
+    toast('Trash emptied', 'info');
+    loadTrash();
+  } catch (e) { toast('Failed to empty trash', 'error'); }
+}
+
+async function updateTrashBadge() {
   const badge = document.getElementById('trash-count');
-  if (trashItems.length > 0) {
-    badge.style.display = '';
-    badge.textContent = trashItems.length;
-  } else {
+  try {
+    const data = await api('/api/trash/list');
+    trashItems = data.items || [];
+    if (trashItems.length > 0) {
+      badge.style.display = '';
+      badge.textContent = trashItems.length;
+    } else {
+      badge.style.display = 'none';
+    }
+  } catch (e) {
     badge.style.display = 'none';
   }
 }
@@ -1653,17 +2074,112 @@ setInterval(async () => {
   } catch (e) {}
 }, 3000);
 
-// === Sidebar Library Sources ===
-async function loadLibrarySources() {
+// === Photo-level analysis tags ===
+async function fetchPhotoTags(filepath) {
+  try {
+    const data = await api('/api/analyze/results');
+    if (!data.photos) return;
+    const match = data.photos.find(p => p.path === filepath);
+    if (!match || !match.tags?.length) return;
+    // Insert tags below the grid
+    const grid = document.getElementById('adjust-grid');
+    const tagsDiv = document.createElement('div');
+    tagsDiv.style.cssText = 'grid-column:1/-1; padding:8px 0 0; display:flex; flex-wrap:wrap; gap:4px; align-items:center;';
+    tagsDiv.innerHTML = `<span style="font-size:10px; color:var(--text3); margin-right:4px;">AI:</span>` +
+      (match.scene ? `<span style="background:var(--accent-soft); color:var(--accent); padding:2px 8px; border-radius:4px; font-size:10px; font-weight:600;">${match.scene}</span>` : '') +
+      match.tags.slice(0, 4).map(t => `<span style="background:var(--file-bg); border:1px solid var(--border); padding:2px 6px; border-radius:4px; font-size:10px;">${t[0]}</span>`).join('') +
+      (match.quality?.is_blurry ? `<span style="background:var(--warning-soft); color:var(--warning); padding:2px 6px; border-radius:4px; font-size:10px; font-weight:600;">模糊</span>` : '') +
+      (match.faces_count > 0 ? `<span style="background:var(--success-soft); color:var(--success); padding:2px 6px; border-radius:4px; font-size:10px;">${match.faces_count} face${match.faces_count > 1 ? 's' : ''}</span>` : '');
+    grid.appendChild(tagsDiv);
+  } catch (e) { /* analysis not available, silently skip */ }
+}
+
+// === Analysis Results ===
+async function showAnalysisResults() {
   let data;
-  try { data = await api('/api/destinations'); } catch (e) { return; }
-  const el = document.getElementById('library-sources');
-  if (!el) return;
-  const items = data.destinations || [];
-  el.innerHTML = items.map(d => {
-    const safeName = d.name.replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    return `<div class="nav-item" style="padding-left:28px; font-size:12px;" data-page="library" onclick="switchPage('library')"><span>${safeName}</span></div>`;
-  }).join('');
+  try { data = await api('/api/analyze/results'); } catch (e) { toast('Failed to load analysis results', 'error'); return; }
+
+  if (!data.total || data.total === 0) {
+    toast('No analysis results yet — import photos first', 'info');
+    return;
+  }
+
+  // Use adjust-modal to show results
+  document.getElementById('adjust-modal').style.display = '';
+  const grid = document.getElementById('adjust-grid');
+  grid.style.gridTemplateColumns = '1fr';
+  document.getElementById('adjust-actions').style.display = 'none';
+  const toolbar = document.getElementById('adjust-toolbar');
+  if (toolbar) toolbar.style.display = 'none';
+
+  let html = `<div style="max-height:70vh; overflow-y:auto;">`;
+  html += `<div style="font-size:13px; color:var(--text2); margin-bottom:16px;">${data.total} photos analyzed</div>`;
+
+  // Scene groups
+  if (data.scene_groups?.length) {
+    html += `<h4 style="font-size:13px; font-weight:600; margin-bottom:10px;">Scene Classification</h4>`;
+    html += `<div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:20px;">`;
+    for (const g of data.scene_groups) {
+      html += `<div style="background:var(--accent-soft); border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px 14px; min-width:100px; text-align:center;">
+        <div style="font-size:18px; font-weight:700; color:var(--accent);">${g.count}</div>
+        <div style="font-size:12px; color:var(--text2);">${g.category}</div>
+        ${g.sample_thumbs?.length ? `<div style="display:flex; gap:2px; margin-top:6px; justify-content:center;">${g.sample_thumbs.slice(0,3).map(t => t ? `<img src="${t}" style="width:28px;height:28px;border-radius:4px;object-fit:cover;">` : '').join('')}</div>` : ''}
+      </div>`;
+    }
+    html += `</div>`;
+  }
+
+  // Quality issues
+  if (data.quality_issues?.length) {
+    html += `<h4 style="font-size:13px; font-weight:600; margin-bottom:10px;">Quality Issues</h4>`;
+    html += `<div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(200px, 1fr)); gap:8px; margin-bottom:20px;">`;
+    for (const q of data.quality_issues.slice(0, 12)) {
+      const issueColor = q.issue === 'blurry' ? 'var(--warning)' : q.issue === 'overexposed' ? 'var(--danger)' : 'var(--accent)';
+      html += `<div style="background:var(--file-bg); border:1px solid var(--border); border-radius:var(--radius-sm); padding:8px; display:flex; gap:8px; align-items:center;">
+        ${q.thumbnail_url ? `<img src="${q.thumbnail_url}" style="width:40px;height:40px;border-radius:4px;object-fit:cover;">` : ''}
+        <div>
+          <div style="font-size:11px; font-weight:600;">${q.filename || ''}</div>
+          <div style="font-size:10px; color:${issueColor}; font-weight:600;">${q.issue_zh} <span style="color:var(--text3);">${q.detail}</span></div>
+        </div>
+      </div>`;
+    }
+    html += `</div>`;
+  }
+
+  // Face groups
+  if (data.face_groups?.length) {
+    html += `<h4 style="font-size:13px; font-weight:600; margin-bottom:10px;">People</h4>`;
+    html += `<div style="display:flex; flex-wrap:wrap; gap:10px; margin-bottom:20px;">`;
+    for (const f of data.face_groups.slice(0, 10)) {
+      const label = f.gender ? `${f.gender === 'M' ? 'Male' : 'Female'}${f.avg_age ? ', ~' + f.avg_age : ''}` : '';
+      html += `<div style="text-align:center; background:var(--file-bg); border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px; min-width:80px;">
+        <div style="display:flex; gap:2px; justify-content:center; margin-bottom:6px;">${f.sample_thumbs?.slice(0,3).map(t => t ? `<img src="${t}" style="width:30px;height:30px;border-radius:50%;object-fit:cover;">` : '').join('') || ''}</div>
+        <div style="font-size:16px; font-weight:700; color:var(--accent);">${f.count}</div>
+        <div style="font-size:10px; color:var(--text3);">${label || 'Person ' + (f.person_id + 1)}</div>
+      </div>`;
+    }
+    html += `</div>`;
+  }
+
+  // Per-photo tags (show first few)
+  if (data.photos?.length) {
+    html += `<h4 style="font-size:13px; font-weight:600; margin-bottom:10px;">Per-Photo Tags (sample)</h4>`;
+    html += `<div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(180px, 1fr)); gap:6px; margin-bottom:12px;">`;
+    for (const p of data.photos.slice(0, 18)) {
+      const tags = (p.tags || []).slice(0, 3).map(t => `<span style="background:var(--accent-soft); padding:1px 6px; border-radius:4px; font-size:9px;">${t[0]}</span>`).join(' ');
+      html += `<div style="background:var(--file-bg); border:1px solid var(--border); border-radius:var(--radius-xs); padding:6px; display:flex; gap:6px; align-items:center;">
+        ${p.thumbnail_url ? `<img src="${p.thumbnail_url}" style="width:32px;height:32px;border-radius:4px;object-fit:cover;">` : ''}
+        <div style="min-width:0; flex:1;">
+          <div style="font-size:10px; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${p.filename}</div>
+          <div style="margin-top:2px;">${tags}${p.scene ? ` <span style="font-size:9px; color:var(--text3);">${p.scene}</span>` : ''}</div>
+        </div>
+      </div>`;
+    }
+    html += `</div>`;
+  }
+
+  html += `</div>`;
+  grid.innerHTML = html;
 }
 
 // === Theme ===
@@ -1684,11 +2200,92 @@ function toggleTheme() {
 // Init theme from localStorage or default to light
 applyTheme(localStorage.getItem('cm-theme') || 'light');
 
+// === Progressive Full-Res Loading for iCloud ===
+const _fullResQueue = new Set();    // IDs waiting to load
+const _fullResLoading = new Set();  // Currently loading
+const _fullResDone = new Set();     // Already loaded
+const MAX_CONCURRENT_FULL = 3;
+
+let _progressiveObserver = null;
+
+function startProgressiveLoading() {
+  // Clean up previous observer
+  if (_progressiveObserver) _progressiveObserver.disconnect();
+  _fullResQueue.clear();
+  _fullResLoading.clear();
+  _fullResDone.clear();
+
+  _progressiveObserver = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      const img = entry.target;
+      const thumbId = img.id;
+      if (!thumbId || !thumbId.startsWith('icloud-thumb-')) return;
+
+      if (entry.isIntersecting) {
+        // Photo entered viewport — add to queue
+        if (!_fullResDone.has(thumbId)) {
+          _fullResQueue.add(thumbId);
+        }
+      } else {
+        // Photo left viewport — remove from queue (don't cancel if already loading)
+        _fullResQueue.delete(thumbId);
+      }
+    });
+    processFullResQueue();
+  }, { rootMargin: '200px' });  // Start loading 200px before visible
+
+  // Observe all iCloud thumbnails
+  document.querySelectorAll('img[id^="icloud-thumb-"]').forEach(img => {
+    _progressiveObserver.observe(img);
+  });
+}
+
+function processFullResQueue() {
+  if (_fullResLoading.size >= MAX_CONCURRENT_FULL) return;
+  if (_fullResQueue.size === 0) return;
+
+  // Pick the next item from queue
+  const thumbId = _fullResQueue.values().next().value;
+  _fullResQueue.delete(thumbId);
+  _fullResLoading.add(thumbId);
+
+  const img = document.getElementById(thumbId);
+  if (!img || !img.src) { _fullResLoading.delete(thumbId); processFullResQueue(); return; }
+
+  const fullUrl = img.src.replace('/thumb?', '/full?');
+  const loader = new Image();
+  loader.onload = () => {
+    // Replace thumbnail with full-res
+    if (img) img.src = fullUrl;
+    _fullResDone.add(thumbId);
+    _fullResLoading.delete(thumbId);
+    processFullResQueue();  // Process next
+  };
+  loader.onerror = () => {
+    _fullResLoading.delete(thumbId);
+    processFullResQueue();
+  };
+  loader.src = fullUrl;
+}
+
+// === Infinite Scroll ===
+// Attach to the .content div inside the active page
+document.addEventListener('scroll', function(e) {
+  const el = e.target;
+  if (!el.classList || !el.classList.contains('content')) return;
+  if (el.scrollTop + el.clientHeight >= el.scrollHeight - 200) {
+    if (currentLibSource === 'local' && localHasMore && !localLoading) {
+      loadLocalTimeline(false);
+    } else if (currentLibSource === 'icloud' && icloudHasMore && !icloudLoading) {
+      loadLibPhotos(undefined, false);
+    }
+  }
+}, true);  // useCapture to catch scroll on nested elements
+
 // === Init ===
 checkDngStatus();
-loadLibrarySources();
 updateTrashBadge();
-switchPage('library');  // Library is the default page
+switchLibSource('local');  // Library is the default page
 </script>
 </body>
 </html>

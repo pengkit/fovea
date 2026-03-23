@@ -74,8 +74,6 @@ for f in *.py; do
     cp "$f" "$APP_DIR/Contents/Resources/src/"
 done
 cp -r static "$APP_DIR/Contents/Resources/src/"
-mkdir -p "$APP_DIR/Contents/Resources/src/data"
-mkdir -p "$APP_DIR/Contents/Resources/src/thumbnails"
 
 # ---- Copy icon ----
 if [ -f "fovea.icns" ]; then

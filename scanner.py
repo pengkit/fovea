@@ -163,11 +163,13 @@ def generate_thumbnail(filepath: str, file_type: FileType) -> Optional[str]:
             return f"/thumbnails/{fhash}.jpg"
 
         if file_type == FileType.JPEG:
-            with Image.open(filepath) as img:
-                img.thumbnail(THUMBNAIL_SIZE)
-                img = img.convert("RGB")
-                img.save(thumb_path, "JPEG", quality=THUMBNAIL_QUALITY)
-                return f"/thumbnails/{fhash}.jpg"
+            from PIL import ImageOps
+            img = Image.open(filepath)
+            img = ImageOps.exif_transpose(img) or img  # Rotate pixels per EXIF
+            img.thumbnail(THUMBNAIL_SIZE)
+            img = img.convert("RGB")
+            img.save(thumb_path, "JPEG", quality=THUMBNAIL_QUALITY)
+            return f"/thumbnails/{fhash}.jpg"
 
         elif file_type == FileType.RAW:
             # 尝试用 rawpy 提取 RAW 内嵌的预览图
@@ -421,21 +423,21 @@ def list_destinations() -> list[VolumeInfo]:
     """列出所有可用的导入目标（外置硬盘 + 本地目录）"""
     destinations = []
 
-    # 本地 Pictures 目录
-    pictures = Path.home() / "Pictures"
-    if pictures.exists():
-        try:
-            st = os.statvfs(str(pictures))
-            total = st.f_blocks * st.f_frsize
-            free = st.f_bavail * st.f_frsize
-        except OSError:
-            total = free = None
-        destinations.append(VolumeInfo(
-            path=str(pictures),
-            name="Pictures (本地)",
-            total_space=total,
-            free_space=free,
-        ))
+    # Fovea 专属目录
+    fovea_dir = Path.home() / "Pictures" / "Fovea"
+    fovea_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        st = os.statvfs(str(fovea_dir))
+        total = st.f_blocks * st.f_frsize
+        free = st.f_bavail * st.f_frsize
+    except OSError:
+        total = free = None
+    destinations.append(VolumeInfo(
+        path=str(fovea_dir),
+        name="Fovea Library",
+        total_space=total,
+        free_space=free,
+    ))
 
     # 外置硬盘
     for vol_root in VOLUME_PATHS:

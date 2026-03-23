@@ -37,68 +37,54 @@ def generate_adjustments(filepath: str) -> dict:
             ]
         }
     """
-    try:
-        img = Image.open(filepath).convert("RGB")
-    except Exception as e:
-        log.error(f"Cannot open {filepath}: {e}")
-        return {"error": str(e)}
-
-    # Resize for processing
-    img.thumbnail((PROCESS_SIZE, PROCESS_SIZE), Image.LANCZOS)
-
     fhash = hashlib.md5(filepath.encode()).hexdigest()[:12]
     THUMBNAIL_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Save original preview
-    orig_path = THUMBNAIL_DIR / f"{fhash}_original.jpg"
-    img.save(str(orig_path), "JPEG", quality=88)
+    # All image types use Core Image via Swift — same engine as Apple Photos
+    return _generate_ci_adjustments(filepath, fhash)
 
-    results = {
-        "original": f"/thumbnails/{fhash}_original.jpg",
-        "adjustments": [],
-    }
+    return results
 
-    # --- Adjustment 1: Auto White Balance + Exposure ---
-    try:
-        adj1 = _auto_balance(img)
-        p = THUMBNAIL_DIR / f"{fhash}_adj1.jpg"
-        adj1.save(str(p), "JPEG", quality=88)
-        results["adjustments"].append({
-            "name": "Auto Balance",
-            "name_zh": "自动平衡",
-            "url": f"/thumbnails/{fhash}_adj1.jpg",
-            "description": "Auto white balance and exposure correction",
-        })
-    except Exception as e:
-        log.debug(f"Adj1 failed: {e}")
 
-    # --- Adjustment 2: Contrast + Clarity Enhancement ---
-    try:
-        adj2 = _enhanced_contrast(img)
-        p = THUMBNAIL_DIR / f"{fhash}_adj2.jpg"
-        adj2.save(str(p), "JPEG", quality=88)
-        results["adjustments"].append({
-            "name": "Enhanced",
-            "name_zh": "增强清晰",
-            "url": f"/thumbnails/{fhash}_adj2.jpg",
-            "description": "Enhanced contrast and clarity",
-        })
-    except Exception as e:
-        log.debug(f"Adj2 failed: {e}")
+def _generate_ci_adjustments(filepath: str, fhash: str) -> dict:
+    """Generate adjustments using Apple Core Image via Swift ThumbnailServer."""
+    import urllib.request
+    import urllib.parse
 
-    # --- Adjustment 3: Vivid / Color Pop ---
-    try:
-        adj3 = _vivid_style(img)
-        p = THUMBNAIL_DIR / f"{fhash}_adj3.jpg"
-        adj3.save(str(p), "JPEG", quality=88)
-        results["adjustments"].append({
-            "name": "Vivid",
-            "name_zh": "鲜艳风格",
-            "url": f"/thumbnails/{fhash}_adj3.jpg",
-            "description": "Boosted colors and vibrance",
-        })
-    except Exception as e:
-        log.debug(f"Adj3 failed: {e}")
+    SWIFT_PORT = 9998
+    encoded_path = urllib.parse.quote(filepath)
+    presets = [
+        ("default", "Original", "原图", "No changes"),
+        ("auto", "Auto Enhance", "自动增强", "Apple ML auto — same as Photos"),
+        ("vivid", "Vivid", "鲜艳", "Smart vibrance + shadow lift"),
+        ("warm", "Warm Tone", "暖色调", "Warm temperature + soft contrast"),
+    ]
+
+    results = {"adjustments": []}
+
+    for i, (preset, name, name_zh, desc) in enumerate(presets):
+        try:
+            url = f"http://127.0.0.1:{SWIFT_PORT}/raw?path={encoded_path}&w=1200&preset={preset}"
+            with urllib.request.urlopen(url, timeout=30) as resp:
+                data = resp.read()
+
+            fname = f"{fhash}_ci_{preset}.jpg"
+            out_path = THUMBNAIL_DIR / fname
+            with open(str(out_path), "wb") as f:
+                f.write(data)
+
+            entry = {
+                "name": name,
+                "name_zh": name_zh,
+                "url": f"/thumbnails/{fname}",
+                "description": desc,
+            }
+            if i == 0:
+                results["original"] = f"/thumbnails/{fname}"
+            else:
+                results["adjustments"].append(entry)
+        except Exception as e:
+            log.debug(f"RAW preset {preset} failed: {e}")
 
     return results
 
@@ -202,48 +188,76 @@ def _add_vignette(img: Image.Image, strength: float = 0.2) -> Image.Image:
     return Image.fromarray(np.clip(arr, 0, 255).astype(np.uint8))
 
 
-def save_chosen_adjustment(filepath: str, adjustment_url: str, save_mode: str = "replace") -> dict:
-    """
-    Save user's chosen adjustment.
+def save_chosen_adjustment(filepath: str, adjustment_url: str, save_mode: str = "replace", rotation: int = 0) -> dict:
+    """Save adjustment in-place, preserving original file dates."""
+    import shutil
 
-    Args:
-        filepath: Original photo path
-        adjustment_url: URL of chosen adjustment thumbnail
-        save_mode: "replace" (overwrite original) or "both" (save as new file alongside)
-
-    Returns: {"saved": path}
-    """
-    # Get the adjustment image from thumbnails
     adj_filename = Path(adjustment_url).name
-    adj_path = THUMBNAIL_DIR / adj_filename
-
-    if not adj_path.exists():
-        return {"error": "Adjustment file not found"}
-
-    # Load the adjustment at full resolution from original
-    orig = Image.open(filepath).convert("RGB")
-    adj_preview = Image.open(str(adj_path)).convert("RGB")
-
-    # Determine which adjustment was chosen and re-apply at full resolution
-    if "_adj1" in str(adj_filename):
-        full_adj = _auto_balance(orig)
-    elif "_adj2" in str(adj_filename):
-        full_adj = _enhanced_contrast(orig)
-    elif "_adj3" in str(adj_filename):
-        full_adj = _vivid_style(orig)
-    else:
-        return {"error": "Unknown adjustment"}
-
     orig_path = Path(filepath)
 
-    if save_mode == "replace":
-        output_path = orig_path
-        full_adj.save(str(output_path), quality=95)
-        return {"saved": str(output_path), "mode": "replaced"}
+    if not orig_path.exists():
+        return {"error": "File not found"}
+
+    # Save original timestamps before any modification
+    orig_stat = orig_path.stat()
+    orig_atime = orig_stat.st_atime
+    orig_mtime = orig_stat.st_mtime
+
+    # Backup original (hidden file) if not already backed up
+    backup_path = orig_path.parent / f".{orig_path.stem}_original{orig_path.suffix}"
+    if not backup_path.exists():
+        shutil.copy2(str(orig_path), str(backup_path))
+
+    # Determine preset from filename (e.g., xxx_ci_auto.jpg → "auto")
+    import urllib.request, urllib.parse, io
+    preset = "default"
+    for p in ["auto", "vivid", "warm"]:
+        if f"_ci_{p}" in str(adj_filename) or f"_raw_{p}" in str(adj_filename):
+            preset = p
+            break
+
+    if preset != "default":
+        # Use Core Image at full resolution via Swift
+        SWIFT_PORT = 9998
+        encoded_path = urllib.parse.quote(filepath)
+        try:
+            url = f"http://127.0.0.1:{SWIFT_PORT}/raw?path={encoded_path}&w=9999&preset={preset}"
+            with urllib.request.urlopen(url, timeout=60) as resp:
+                data = resp.read()
+            result = Image.open(io.BytesIO(data)).convert("RGB")
+        except Exception:
+            return {"error": "Core Image rendering failed"}
     else:
-        # Save alongside with suffix
-        stem = orig_path.stem
-        suffix = orig_path.suffix
-        output_path = orig_path.parent / f"{stem}_adjusted{suffix}"
-        full_adj.save(str(output_path), quality=95)
-        return {"saved": str(output_path), "mode": "saved_copy"}
+        try:
+            result = Image.open(filepath).convert("RGB")
+        except Exception:
+            return {"error": "Cannot open original"}
+
+    # Apply rotation
+    if rotation:
+        rot_map = {90: Image.Transpose.ROTATE_270, 180: Image.Transpose.ROTATE_180, 270: Image.Transpose.ROTATE_90}
+        if rotation in rot_map:
+            result = result.transpose(rot_map[rotation])
+
+    # Overwrite the original file
+    result.save(str(orig_path), quality=95)
+
+    # Restore original timestamps so the photo keeps its date
+    import os
+    os.utime(str(orig_path), (orig_atime, orig_mtime))
+
+    return {"saved": str(orig_path), "mode": "replaced"}
+
+
+def revert_adjustment(filepath: str) -> dict:
+    """Revert to original by restoring from backup."""
+    import shutil
+    orig_path = Path(filepath)
+    backup_path = orig_path.parent / f".{orig_path.stem}_original{orig_path.suffix}"
+
+    if not backup_path.exists():
+        return {"error": "No backup found — original was never modified by Fovea"}
+
+    shutil.copy2(str(backup_path), str(orig_path))
+    backup_path.unlink()
+    return {"reverted": str(orig_path)}

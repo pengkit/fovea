@@ -5,8 +5,9 @@ from pathlib import Path
 
 # === 路径配置 ===
 BASE_DIR = Path(__file__).parent
-DATA_DIR = Path(os.environ.get("FOVEA_DATA_DIR", BASE_DIR / "data"))
-THUMBNAIL_DIR = Path(os.environ.get("FOVEA_THUMBNAIL_DIR", BASE_DIR / "thumbnails"))
+FOVEA_HOME = Path(os.environ.get("FOVEA_HOME", Path.home() / "Library" / "Application Support" / "Fovea"))
+DATA_DIR = Path(os.environ.get("FOVEA_DATA_DIR", FOVEA_HOME / "data"))
+THUMBNAIL_DIR = Path(os.environ.get("FOVEA_THUMBNAIL_DIR", FOVEA_HOME / "thumbnails"))
 STATIC_DIR = BASE_DIR / "static"
 
 # macOS 外置卷挂载点
@@ -85,7 +86,7 @@ CAMERA_BRANDS = {
 
 # === 导入目录模板 ===
 # 支持变量: {year}, {month}, {day}, {camera}, {event}
-ORGANIZE_PATTERN = "{year}/{month:02d}/{year}{month:02d}{day:02d}"
+ORGANIZE_PATTERN = "{year}/{month:02d}/{day:02d}"
 
 # === 缩略图 ===
 THUMBNAIL_SIZE = (300, 300)
